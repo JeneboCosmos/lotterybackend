@@ -262,9 +262,10 @@ exports.getWritersByAgent = async (req, res) => {
   const { agentId } = req.params;
   try {
     const [writers] = await db.query(
-      "SELECT * FROM users WHERE role = ? AND agent_id = ?",
-      [agentId]
-    );
+  "SELECT * FROM users WHERE role = ? AND agent_id = ?",
+  ['writer', agentId]
+);
+
     res.json(writers);
   } catch (err) {
     console.error('❌ Error fetching writers by agent:', err.message);
