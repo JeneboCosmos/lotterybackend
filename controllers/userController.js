@@ -5,22 +5,45 @@ require('dotenv').config();
 
 // CREATE (REGISTER)
 exports.register = async (req, res) => {
-  const { username, email, phone, password, role, agent_id } = req.body;
-  console.log('📥 Register Request:', { username, email, role, agent_id });
+  const {
+    username,
+    email,
+    phone,
+    password,
+    role,
+    agent_id,
+    physical_address,
+    digital_address,
+    postal_address,
+    guarantor_name,
+    guarantor_phone,
+    next_of_kin_name,
+    next_of_kin_phone,
+    ghana_card_number
+  } = req.body;
 
-  // Only allow writer, agent, or admin
+  console.log('📥 Register Request:', req.body);
+
+  // Allow only 3 roles
   if (!['writer', 'agent', 'admin'].includes(role)) {
     return res.status(400).json({ msg: 'Invalid role selected' });
   }
 
   const hashedPassword = await bcrypt.hash(password, 10);
-  const role_id = `${role}-${Date.now()}`; // Always generate role_id
+  const role_id = `${role}-${Date.now()}`;
 
   try {
     const sql = `
-      INSERT INTO users (username, email, phone, password, role, role_id, agent_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO users 
+      (
+        username, email, phone, password, role, role_id, agent_id, 
+        physical_address, digital_address, postal_address,
+        guarantor_name, guarantor_phone, next_of_kin_name, next_of_kin_phone,
+        ghana_card_number
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
+
     await db.query(sql, [
       username,
       email,
@@ -28,14 +51,31 @@ exports.register = async (req, res) => {
       hashedPassword,
       role,
       role_id,
-      role === 'writer' ? agent_id : null
+      role === 'writer' ? agent_id : null,
+      physical_address,
+      digital_address,
+      postal_address,
+      guarantor_name,
+      guarantor_phone,
+      next_of_kin_name,
+      next_of_kin_phone,
+      ghana_card_number
     ]);
 
     console.log('✅ User registered successfully:', username);
+
     res.status(201).json({
       msg: 'User registered successfully',
-      user: { username, email, phone, role, role_id, agent_id: role === 'writer' ? agent_id : null }
+      user: {
+        username,
+        email,
+        phone,
+        role,
+        role_id,
+        agent_id: role === 'writer' ? agent_id : null,
+      }
     });
+
   } catch (err) {
     console.error('❌ DB Error during registration:', err.message);
     res.status(500).json({ msg: err.message });
