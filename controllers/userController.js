@@ -12,6 +12,7 @@ exports.register = async (req, res) => {
     password,
     role,
     agent_id,
+    platform_id,        // ✅ ADDED
     physical_address,
     digital_address,
     postal_address,
@@ -24,7 +25,6 @@ exports.register = async (req, res) => {
 
   console.log('📥 Register Request:', req.body);
 
-  // Allow only 3 roles
   if (!['writer', 'agent', 'admin'].includes(role)) {
     return res.status(400).json({ msg: 'Invalid role selected' });
   }
@@ -36,12 +36,14 @@ exports.register = async (req, res) => {
     const sql = `
       INSERT INTO users 
       (
-        username, email, phone, password, role, role_id, agent_id, 
+        username, email, phone, password, role, role_id, 
+        agent_id, platform_id,        --  ADDED HERE
         physical_address, digital_address, postal_address,
-        guarantor_name, guarantor_phone, next_of_kin_name, next_of_kin_phone,
+        guarantor_name, guarantor_phone,
+        next_of_kin_name, next_of_kin_phone,
         ghana_card_number
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
     await db.query(sql, [
@@ -52,6 +54,7 @@ exports.register = async (req, res) => {
       role,
       role_id,
       role === 'writer' ? agent_id : null,
+      role === 'writer' ? platform_id : null,  
       physical_address,
       digital_address,
       postal_address,
@@ -62,7 +65,7 @@ exports.register = async (req, res) => {
       ghana_card_number
     ]);
 
-    console.log('✅ User registered successfully:', username);
+    console.log('User registered successfully:', username);
 
     res.status(201).json({
       msg: 'User registered successfully',
@@ -73,6 +76,7 @@ exports.register = async (req, res) => {
         role,
         role_id,
         agent_id: role === 'writer' ? agent_id : null,
+        platform_id: role === 'writer' ? platform_id : null  
       }
     });
 
@@ -81,8 +85,6 @@ exports.register = async (req, res) => {
     res.status(500).json({ msg: err.message });
   }
 };
-
-// LOGIN
 
 
 
