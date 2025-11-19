@@ -260,35 +260,6 @@ router.put('/users/:id/assign-platform', async (req, res) => {
 
 
 // === Get a single agent and all their platforms ===
-router.get('/agents/:id/platforms', async (req, res) => {
-  const { id } = req.params;
-
-  try {
-    // Fetch the agent's details
-    const [agentRows] = await db.query(
-      'SELECT user_id, username, email, phone, role FROM users WHERE user_id = ? AND role = "agent"',
-      [id]
-    );
-
-    if (agentRows.length === 0) {
-      return res.status(404).json({ msg: 'Agent not found' });
-    }
-
-    // Fetch all platforms assigned to the agent
-    const [platforms] = await db.query(
-      'SELECT platform_id, platform_reference, platform_name, status FROM platforms WHERE agent_id = ?',
-      [id]
-    );
-
-    res.json({
-      agent: agentRows[0],
-      platforms
-    });
-  } catch (err) {
-    console.error('Error fetching agent and platforms:', err.message);
-    res.status(500).json({ msg: 'Internal server error' });
-  }
-});
 
 
 
