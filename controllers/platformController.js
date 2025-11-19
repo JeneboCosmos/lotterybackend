@@ -103,4 +103,33 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
+
+
+// Get agent with all their platforms count
+router.get('/agent/:agent_id/platforms', async (req, res) => {
+  const { agent_id } = req.params;
+
+  try {
+    // Get agent info
+    const [agents] = await db.query('SELECT * FROM users WHERE user_id = ? AND role = "agent"', [agent_id]);
+    if (agents.length === 0) return res.status(404).json({ msg: 'Agent not found' });
+
+    const agent = agents[0];
+
+    // Count platforms for this agent
+    const [platforms] = await db.query(
+      'SELECT COUNT(*) AS number_of_platforms FROM platforms WHERE agent_id = ?',
+      [agent_id]
+    );
+
+    agent.number_of_platforms = platforms[0].number_of_platforms;
+
+    res.json(agent);
+  } catch (err) {
+    console.error('Error fetching agent with platforms:', err.message);
+    res.status(500).json({ msg: 'Internal server error' });
+  }
+});
+
+
 module.exports = router;
