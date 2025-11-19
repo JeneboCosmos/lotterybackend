@@ -4,15 +4,17 @@ const db = require('../config/db'); // mysql2/promise connection
 
 // Helper: Generate unique platform reference
 // Helper: Generate next sequential platform reference
+// Function to generate sequential platform reference
 async function generateSequentialPlatformReference() {
   const prefix = 'PLAT';
 
-  // Get the last inserted platform_reference number
+  // Get the last inserted platform_reference starting with PLAT
   const [rows] = await db.query(
     `SELECT platform_reference 
      FROM platforms 
      WHERE platform_reference LIKE '${prefix}%' 
-     ORDER BY platform_id DESC LIMIT 1`
+     ORDER BY platform_id DESC 
+     LIMIT 1`
   );
 
   let nextNumber = 1;
@@ -25,34 +27,37 @@ async function generateSequentialPlatformReference() {
   return prefix + nextNumber;
 }
 
-
 // === Create a new platform (admin only) ===
 router.post('/', async (req, res) => {
   const { platform_name, admin_id, status = 'active' } = req.body;
 
+  // Validate required fields
   if (!admin_id || !platform_name) {
     return res.status(400).json({ msg: 'admin_id and platform_name are required' });
   }
 
   try {
-    // Validate admin
+    // Validate that the user is an admin
     const [adminRows] = await db.query(
       'SELECT * FROM users WHERE user_id = ? AND role = ?',
       [admin_id, 'admin']
     );
+
     if (adminRows.length === 0) {
       return res.status(403).json({ msg: 'Invalid admin_id or user is not an admin' });
     }
 
-    // Generate sequential platform_reference
+    // Generate the next sequential platform reference
     const platform_reference = await generateSequentialPlatformReference();
 
+    // Insert new platform into the database
     const sql = `
       INSERT INTO platforms (platform_reference, platform_name, admin_id, status)
       VALUES (?, ?, ?, ?)
     `;
     const [result] = await db.query(sql, [platform_reference, platform_name, admin_id, status]);
 
+    // Respond with the created platform data
     res.status(201).json({
       msg: 'Platform created successfully',
       platform_id: result.insertId,
@@ -66,6 +71,7 @@ router.post('/', async (req, res) => {
     res.status(500).json({ msg: 'Internal server error' });
   }
 });
+
 
 // === Assign an agent to a platform ===
 router.put('/:id/assign-agent', async (req, res) => { 
