@@ -309,7 +309,7 @@ router.get('/agents/:id/platforms', async (req, res) => {
 
     // Fetch all platforms assigned to this agent
     const [platforms] = await db.query(
-      'SELECT platform_id, platform_reference, platform_name, status FROM platforms WHERE agent_id = ?',
+      'SELECT platform_id, platform_reference, platform_name, balance, created_at, status FROM platforms WHERE agent_id = ?',
       [id]
     );
 
