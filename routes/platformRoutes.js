@@ -325,9 +325,12 @@ router.get('/agents/:id/platforms', async (req, res) => {
   try {
     // Fetch the agent
     const [agentRows] = await db.query(
-      'SELECT user_id, username, email, phone, role FROM users WHERE user_id = ? AND role = "agent"',
-      [id]
-    );
+  `SELECT user_id, username, email, phone, role, balance 
+   FROM users 
+   WHERE user_id = ? AND role = 'agent'`,
+  [id]
+);
+
 
     if (agentRows.length === 0) return res.status(404).json({ msg: 'Agent not found' });
 
