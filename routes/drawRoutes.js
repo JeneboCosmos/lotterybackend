@@ -25,14 +25,17 @@ router.post('/', async (req, res) => {
 
     const draw_id = drawResult.insertId;
 
-    // ✅ Insert notification OUTSIDE the transaction so it always saves
-    
+    // Get all plays for that game and draw_date
+    const drawDateOnly = draw_date.split('T')[0]; // 'YYYY-MM-DD'
+    const startOfDay = drawDateOnly + ' 00:00:00';
+    const endOfDay = drawDateOnly + ' 23:59:59';
 
-    // Get plays for that game and date
     const [plays] = await connection.execute(
-      'SELECT * FROM play WHERE play_date = ? AND game_id = ?',
-      [draw_date, game_id]
+      'SELECT * FROM play WHERE play_date BETWEEN ? AND ? AND game_id = ?',
+      [startOfDay, endOfDay, game_id]
     );
+
+    console.log(`🎯 Found ${plays.length} plays for this draw`);
 
     const winners = [];
 
@@ -77,11 +80,11 @@ router.post('/', async (req, res) => {
       }
 
       if (isWinner) {
-        const amountWon = play.stake * 10;
+        const amountWon = play.stake * 10; // or your calculation
         await connection.execute(
           'INSERT INTO play_results (play_id, user_id, game_id, draw_id, combination_id, matched_numbers, amount_won) VALUES (?, ?, ?, ?, ?, ?, ?)',
           [
-            play.id,
+            play.play_id,
             play.user_id,
             play.game_id,
             draw_id,
@@ -90,18 +93,20 @@ router.post('/', async (req, res) => {
             amountWon,
           ]
         );
-        winners.push(play.id);
+        winners.push(play.play_id);
       }
     }
 
     // Commit transaction
     await connection.commit();
 
+    console.log(`[🔹 Transaction committed] Winners: ${winners.length}`);
     res.status(200).json({
       message: 'Draw completed and winners determined',
       draw_id,
       winners,
     });
+
   } catch (err) {
     await connection.rollback();
     console.error('❌ Error during draw process:', err);
