@@ -116,7 +116,7 @@ router.put('/:id/assign-agent', async (req, res) => {
       [agent_id, id]
     );
 
-    res.json({ msg: '✅ Agent assigned to platform successfully' });
+    res.json({ msg: 'Agent assigned to platform successfully' });
   } catch (err) {
     console.error('Error assigning agent:', err.message);
     res.status(500).json({ msg: 'Internal server error' });
@@ -364,7 +364,7 @@ router.put('/:id/reassign-agent', async (req, res) => {
       [new_agent_id, id]
     );
 
-    res.json({ msg: '✅ Platform reassigned to new agent successfully' });
+    res.json({ msg: 'Platform reassigned to new agent successfully' });
   } catch (err) {
     console.error('Error reassigning platform:', err.message);
     res.status(500).json({ msg: 'Internal server error' });
@@ -372,6 +372,44 @@ router.put('/:id/reassign-agent', async (req, res) => {
 });
 
 
+
+
+// PUT /api/platforms/:id/toggle-status
+router.put('/:id/toggle-status', async (req, res) => { 
+  const { id } = req.params;
+  const { status } = req.body; // expected: 'active' or 'inactive'
+
+  // Validate status
+  if (!status || !['active', 'inactive'].includes(status)) {
+    return res.status(400).json({ msg: "Invalid status. Must be 'active' or 'inactive'." });
+  }
+
+  try {
+    // Check if platform exists
+    const [platformRows] = await db.query(
+      'SELECT * FROM platforms WHERE platform_id = ?',
+      [id]
+    );
+
+    if (platformRows.length === 0) {
+      return res.status(404).json({ msg: 'Platform not found' });
+    }
+
+    // Update status
+    await db.query(
+      'UPDATE platforms SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE platform_id = ?',
+      [status, id]
+    );
+
+    res.json({ 
+      msg: `Platform ${status === 'active' ? 'enabled' : 'disabled'} successfully.` 
+    });
+
+  } catch (err) {
+    console.error('Error toggling platform status:', err.message);
+    res.status(500).json({ msg: 'Internal server error' });
+  }
+});
 
 
 

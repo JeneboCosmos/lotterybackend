@@ -8,11 +8,8 @@ module.exports = {
         user_id,
         game_name,
         draw_date,
-        number_range,
         opening_date,
         closing_date,
-        min_stake,
-        max_stake,
         is_recurring,
         recurrence_days
       } = req.body;
@@ -22,25 +19,19 @@ module.exports = {
           user_id,
           game_name,
           draw_date,
-          number_range,
           opening_date,
           closing_date,
-          min_stake,
-          max_stake,
           is_recurring,
           recurrence_days
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
       `;
 
       const [result] = await db.execute(query, [
         user_id,
         game_name,
         draw_date,
-        number_range,
         opening_date,
         closing_date,
-        min_stake,
-        max_stake,
         is_recurring,
         recurrence_days
       ]);
@@ -90,9 +81,6 @@ module.exports = {
         draw_date,
         opening_date,
         closing_date,
-        number_range,
-        min_stake,
-        max_stake,
         is_recurring,
         recurrence_days
       } = req.body;
@@ -103,9 +91,6 @@ module.exports = {
           draw_date = ?,
           opening_date = ?,
           closing_date = ?,
-          number_range = ?,
-          min_stake = ?,
-          max_stake = ?,
           is_recurring= ?,
           recurrence_days= ?,
           updated_at = CURRENT_TIMESTAMP
@@ -117,9 +102,6 @@ module.exports = {
         draw_date,
         opening_date,
         closing_date,
-        number_range,
-        min_stake,
-        max_stake,
         is_recurring,
         recurrence_days,
         game_id

@@ -20,5 +20,6 @@ router.get("/summary", commissionController.getFinancialSummary);
 
 // NEW: Agent's Platform Summary (Gross & Net per platform)
 router.get('/agent-platform-summarys', commissionController.getAgentPlatformSummary);
+router.get('/current', commissionController.getCurrentCommission);
 
 module.exports = router;

@@ -132,6 +132,13 @@ exports.login = async (req, res) => {
       }
 
       platform = platformRows[0];
+
+      // 🛑 Block login if platform is inactive 
+      if (platform.status === 'inactive') {
+        return res.status(403).json({
+          msg: 'This platform is currently inactive. Please contact your admin.'
+        });
+      }
     }
 
     // 3️⃣ Validate platform_reference for writer
@@ -150,9 +157,16 @@ exports.login = async (req, res) => {
       }
 
       platform = platformRows[0];
+
+      // 🛑 Block login if platform is inactive 
+      if (platform.status === 'inactive') {
+        return res.status(403).json({
+          msg: 'This platform is currently inactive. Please contact your agent.'
+        });
+      }
     }
 
-    // ✅ Admin login uses only email + password (no platform check)
+    // ADMIN LOGIN (no platform check)
     if (user.role === 'admin') {
       console.log('🔐 Admin login - using only email and password');
 
@@ -161,8 +175,6 @@ exports.login = async (req, res) => {
         process.env.JWT_SECRET,
         { expiresIn: '1d' }
       );
-
-      console.log(`✅ ADMIN login successful for:`, user.username);
 
       return res.json({
         msg: 'Admin login successful',
@@ -179,7 +191,7 @@ exports.login = async (req, res) => {
       });
     }
 
-    // 4️⃣ Fetch the POS linked to this platform (for agent/writer)
+    // 4️⃣ Fetch POS device
     const [posRows] = await db.query(
       `SELECT pos_id, status AS pos_status, platform_reference
        FROM pos_devices
@@ -187,23 +199,17 @@ exports.login = async (req, res) => {
       [platform.platform_reference]
     );
 
-    if (posRows.length === 0) {
-      console.warn('⚠️ No POS found for platform:', platform.platform_reference);
-    }
-
     const pos = posRows[0] || null;
     const pos_id = pos ? pos.pos_id : null;
 
-    // 5️⃣ Generate JWT token
+    // 5️⃣ Generate Token
     const token = jwt.sign(
       { user_id: user.user_id, role: user.role, username: user.username },
       process.env.JWT_SECRET,
       { expiresIn: '1d' }
     );
 
-    console.log(`✅ ${user.role} login successful for:`, user.username);
-
-    // 6️⃣ Send final response
+    // SUCCESS
     res.json({
       msg: 'Login successful',
       token,
@@ -216,15 +222,17 @@ exports.login = async (req, res) => {
         role_id: user.role_id,
         agent_id: user.agent_id,
         balance: user.balance,
-        pos_id,           // single POS linked to the platform
-        platform          // platform info
+        pos_id,
+        platform
       }
     });
+
   } catch (err) {
     console.error('❌ DB Error during login:', err.message);
     res.status(500).json({ msg: 'Internal server error' });
   }
 };
+
 
 // Get all users
 exports.getAllUsers = async (req, res) => {

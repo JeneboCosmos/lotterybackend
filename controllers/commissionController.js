@@ -390,6 +390,37 @@ const getAgentPlatformSummary = async (req, res) => {
 };
 
 
+// Get current active commission rule
+const getCurrentCommission = async (req, res) => {
+  const connection = await db.getConnection();
+  try {
+    const [[rule]] = await connection.execute(
+      `SELECT * FROM commissions WHERE is_active = 1 LIMIT 1`
+    );
+
+    if (!rule) {
+      connection.release();
+      return res.status(404).json({ message: "No active commission rule found" });
+    }
+
+    res.json({
+      success: true,
+      message: "Current commission rule fetched successfully",
+      commission: rule,
+    });
+  } catch (error) {
+    console.error("Error fetching current commission:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error fetching current commission",
+      error: error.message,
+    });
+  } finally {
+    connection.release();
+  }
+};
+
+
 
 
 module.exports = {
@@ -400,4 +431,5 @@ module.exports = {
   getCommissionLogs,
   getFinancialSummary, 
   getAgentPlatformSummary,
+  getCurrentCommission,
 };
