@@ -269,32 +269,71 @@ const calculateYearEndBonus = async (req, res) => {
 // NEW: Commission summary (Gross, Commission, Bonus, Net)
 const getFinancialSummary = async (req, res) => {
   const connection = await db.getConnection();
+
   try {
+    // 📅 Get date filters from query params
+    const { startDate, endDate } = req.query;
+
+    // 🧠 Build dynamic date condition
+    let dateCondition = "";
+    let dateParams = [];
+
+    if (startDate && endDate) {
+      dateCondition = " AND created_at BETWEEN ? AND ?";
+      dateParams = [startDate, endDate];
+    }
+
     // 1️⃣ Gross (total sales)
-    const [[grossResult]] = await connection.execute(`
-      SELECT COALESCE(SUM(price), 0) AS gross FROM play
-    `);
+    const [[grossResult]] = await connection.execute(
+      `
+      SELECT COALESCE(SUM(price), 0) AS gross
+      FROM play
+      WHERE 1=1 ${dateCondition}
+      `,
+      dateParams
+    );
+
     const gross = parseFloat(grossResult.gross || 0);
 
     // 2️⃣ Total Commission applied
-    const [[commissionResult]] = await connection.execute(`
-      SELECT COALESCE(SUM(commission_amount), 0) AS total_commission FROM play WHERE commission_applied = 1
-    `);
-    const totalCommission = parseFloat(commissionResult.total_commission || 0);
+    const [[commissionResult]] = await connection.execute(
+      `
+      SELECT COALESCE(SUM(commission_amount), 0) AS total_commission
+      FROM play
+      WHERE commission_applied = 1 ${dateCondition}
+      `,
+      dateParams
+    );
 
-    // 3️⃣ Total Bonus (optional, can still show)
-    const [[bonusResult]] = await connection.execute(`
-      SELECT COALESCE(SUM(bonus_amount), 0) AS total_bonus FROM commissions WHERE commissionType = 'bonus'
-    `);
+    const totalCommission = parseFloat(
+      commissionResult.total_commission || 0
+    );
+
+    // 3️⃣ Total Bonus
+    const [[bonusResult]] = await connection.execute(
+      `
+      SELECT COALESCE(SUM(bonus_amount), 0) AS total_bonus
+      FROM commissions
+      WHERE commissionType = 'bonus' ${dateCondition}
+      `,
+      dateParams
+    );
+
     const totalBonus = parseFloat(bonusResult.total_bonus || 0);
 
-    // 4️⃣ Net = Gross - Commission ONLY (exclude bonus)
+    // 4️⃣ Net = Gross - Commission (bonus excluded)
     const net = gross - totalCommission;
 
     res.json({
       success: true,
       message: "Financial summary calculated successfully",
-      summary: { gross, totalCommission, totalBonus, net },
+      filters: { startDate, endDate },
+      summary: {
+        gross,
+        totalCommission,
+        totalBonus,
+        net,
+      },
     });
   } catch (error) {
     console.error("Error getting financial summary:", error);
@@ -307,8 +346,6 @@ const getFinancialSummary = async (req, res) => {
     connection.release();
   }
 };
-
-
 
 
 // NEW: Agent's Platform Summary (Gross & Net per platform)

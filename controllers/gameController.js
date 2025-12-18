@@ -11,7 +11,7 @@ module.exports = {
         opening_date,
         closing_date,
         is_recurring,
-        recurrence_days
+        recurrence_days,
       } = req.body;
 
       const query = `
@@ -22,7 +22,7 @@ module.exports = {
           opening_date,
           closing_date,
           is_recurring,
-          recurrence_days
+          recurrence_days,
         ) VALUES (?, ?, ?, ?, ?, ?, ?)
       `;
 
@@ -33,7 +33,7 @@ module.exports = {
         opening_date,
         closing_date,
         is_recurring,
-        recurrence_days
+        recurrence_days,
       ]);
 
       // ✅ Return the generated game_id
@@ -104,7 +104,7 @@ module.exports = {
         closing_date,
         is_recurring,
         recurrence_days,
-        game_id
+        game_id,
       ]);
 
       if (result.affectedRows === 0) {
