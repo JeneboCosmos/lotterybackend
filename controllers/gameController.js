@@ -22,7 +22,7 @@ module.exports = {
           opening_date,
           closing_date,
           is_recurring,
-          recurrence_days,
+          recurrence_days
         ) VALUES (?, ?, ?, ?, ?, ?, ?)
       `;
 
