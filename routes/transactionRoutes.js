@@ -475,6 +475,84 @@ router.get("/history/:user_id", async (req, res) => {
 });
 
 
+router.post("/pay-writers-batch", async (req, res) => {
+  const { payments, admin_user_id } = req.body;
+
+  if (!payments || !Array.isArray(payments) || payments.length === 0 || !admin_user_id) {
+    return res.status(400).json({ message: "payments array and admin_user_id are required" });
+  }
+
+  const conn = await db.getConnection();
+  try {
+    await conn.beginTransaction();
+
+    // Fetch dashboard balance
+    const [[dashboard]] = await conn.query(`SELECT * FROM dashboard_balance LIMIT 1`);
+    if (!dashboard) throw new Error("Dashboard balance record not found");
+
+    // Total amount to pay
+    const totalAmount = payments.reduce((sum, p) => sum + Number(p.amount || 0), 0);
+    if (dashboard.balance < totalAmount) throw new Error("Insufficient dashboard balance");
+
+    // Deduct total from dashboard
+    await conn.query(`UPDATE dashboard_balance SET balance = balance - ?`, [totalAmount]);
+
+    const results = [];
+
+    for (const p of payments) {
+      const { writer_role_id, amount } = p;
+      if (!writer_role_id || !amount) continue;
+
+      const [[writer]] = await conn.query(
+        `SELECT user_id, username, balance FROM users WHERE role_id = ? AND role='writer' LIMIT 1`,
+        [writer_role_id]
+      );
+      if (!writer) continue;
+
+      // Credit writer
+      await conn.query(`UPDATE users SET balance = balance + ? WHERE user_id = ?`, [
+        amount,
+        writer.user_id,
+      ]);
+
+      // Log transaction
+      const transaction_ref = `tx-writer-${uuidv4().slice(0, 8)}`;
+      await conn.query(
+        `INSERT INTO transactions (transaction_ref, from_user_id, to_user_id, type, amount, status, timestamp)
+         VALUES (?, ?, ?, 'Writer Payment', ?, 'completed', NOW())`,
+        [transaction_ref, admin_user_id, writer.user_id, amount]
+      );
+
+      results.push({
+        writer_role_id,
+        writer_name: writer.username,
+        amount,
+        transaction_ref,
+      });
+    }
+
+    // Fetch updated dashboard balance
+    const [[updatedDashboard]] = await conn.query(`SELECT balance FROM dashboard_balance LIMIT 1`);
+
+    await conn.commit();
+
+    res.json({
+      message: "Batch payments completed successfully",
+      total_paid: totalAmount,
+      new_dashboard_balance: updatedDashboard.balance,
+      payments: results,
+    });
+  } catch (error) {
+    await conn.rollback();
+    console.error("❌ Batch dashboard→writer error:", error.message);
+    res.status(500).json({ message: error.message });
+  } finally {
+    conn.release();
+  }
+});
+
+
+
 
 
 module.exports = router;
