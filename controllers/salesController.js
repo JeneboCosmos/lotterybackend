@@ -196,7 +196,7 @@ const getAllWritersOfAgent = async (req, res) => {
 
     // Query all writers assigned to the agent (and optionally filter by platform)
     let query = `
-      SELECT user_id, username, platform_id
+      SELECT user_id, role_id, username, platform_id
       FROM users
       WHERE agent_id = ?
     `;
