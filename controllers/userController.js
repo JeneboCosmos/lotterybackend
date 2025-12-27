@@ -257,17 +257,62 @@ exports.getUserById = async (req, res) => {
 };
 
 // Update user by ID
+
 exports.updateUser = async (req, res) => {
   const { id } = req.params;
-  const { username, email, phone } = req.body;
+  const {
+    username,
+    email,
+    phone,
+    physical_address,
+    digital_address,
+    postal_address,
+    guarantor_name,
+    guarantor_phone,
+    next_of_kin_name,
+    next_of_kin_phone,
+    balance
+  } = req.body;
+
   try {
-    const sql = 'UPDATE users SET username = ?, email = ?, phone = ? WHERE user_id = ?';
-    await db.query(sql, [username, email, phone, id]);
+    const sql = `
+      UPDATE users 
+      SET 
+        username = ?, 
+        email = ?, 
+        phone = ?, 
+        physical_address = ?, 
+        digital_address = ?, 
+        postal_address = ?, 
+        guarantor_name = ?, 
+        guarantor_phone = ?, 
+        next_of_kin_name = ?, 
+        next_of_kin_phone = ?, 
+        balance = ?
+      WHERE user_id = ?
+    `;
+
+    await db.query(sql, [
+      username,
+      email,
+      phone,
+      physical_address,
+      digital_address,
+      postal_address,
+      guarantor_name,
+      guarantor_phone,
+      next_of_kin_name,
+      next_of_kin_phone,
+      balance,
+      id
+    ]);
+
     res.json({ msg: 'User updated successfully' });
   } catch (err) {
     res.status(500).json({ msg: err.message });
   }
 };
+
 
 // Delete user by ID
 exports.deleteUser = async (req, res) => {
