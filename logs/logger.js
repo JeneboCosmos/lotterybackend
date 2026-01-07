@@ -71,12 +71,9 @@ function writeLog(level, message, meta = {}, type = "APP") {
     rotateLog(filePath);
 
     // Append to file
-    try {
-    fs.appendFileSync(filePath, logString + "\n");
-} catch (err) {
-    console.error("Failed to write log:", err);
-}
-
+    fs.appendFile(filePath, logString + "\n", (err) => {
+        if (err) console.error("Failed to write log:", err);
+    });
 
     // Optional console logging in dev
     if (ENV === "development") {

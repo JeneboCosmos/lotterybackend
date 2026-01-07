@@ -9,14 +9,38 @@ exports.createPosDevice = async (req, res) => {
       return res.status(400).json({ msg: 'Missing required fields' });
     }
 
-    const [result] = await db.query(
-      `INSERT INTO pos_devices 
-        (serial_number, device_model, writer_id, agent_id, platform_reference, status, assigned_date, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW(), NOW())`,
-      [serial_number, device_model, writer_id || null, agent_id, platform_reference, status || 'inactive']
+    // 1️⃣ Get the last POS reference for this platform
+    const [lastPos] = await db.query(
+      `SELECT pos_reference FROM pos_devices 
+       WHERE platform_reference = ? 
+       ORDER BY pos_id DESC LIMIT 1`,
+      [platform_reference]
     );
 
-    res.status(201).json({ msg: 'POS device created successfully', pos_id: result.insertId });
+    // 2️⃣ Determine new POS reference
+    let newPosRef = '';
+    if (lastPos.length === 0) {
+      newPosRef = `${platform_reference}-001`; // first POS for this platform
+    } else {
+      const lastNumber = parseInt(lastPos[0].pos_reference.split('-')[1]);
+      const nextNumber = (lastNumber + 1).toString().padStart(3, '0');
+      newPosRef = `${platform_reference}-${nextNumber}`;
+    }
+
+    // 3️⃣ Insert the new POS device with the new reference
+    const [result] = await db.query(
+      `INSERT INTO pos_devices 
+        (pos_reference, serial_number, device_model, writer_id, agent_id, platform_reference, status, assigned_date, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), NOW(), NOW())`,
+      [newPosRef, serial_number, device_model, writer_id || null, agent_id, platform_reference, status || 'inactive']
+    );
+
+    res.status(201).json({ 
+      msg: 'POS device created successfully', 
+      pos_id: result.insertId, 
+      pos_reference: newPosRef 
+    });
+
   } catch (err) {
     console.error('❌ Error creating POS device:', err.message);
     res.status(500).json({ msg: 'Internal server error' });
