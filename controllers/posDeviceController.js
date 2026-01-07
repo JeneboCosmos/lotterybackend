@@ -17,12 +17,13 @@ exports.createPosDevice = async (req, res) => {
       [platform_reference]
     );
 
-    // 2️⃣ Determine new POS reference
+    // 2️⃣ Determine new POS reference safely
     let newPosRef = '';
-    if (lastPos.length === 0) {
-      newPosRef = `${platform_reference}-001`; // first POS for this platform
+    if (lastPos.length === 0 || !lastPos[0].pos_reference) {
+      // No previous POS or pos_reference is null
+      newPosRef = `${platform_reference}-001`;
     } else {
-      const lastNumber = parseInt(lastPos[0].pos_reference.split('-')[1]);
+      const lastNumber = parseInt(lastPos[0].pos_reference.split('-')[1] || '0');
       const nextNumber = (lastNumber + 1).toString().padStart(3, '0');
       newPosRef = `${platform_reference}-${nextNumber}`;
     }
