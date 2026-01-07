@@ -413,6 +413,77 @@ router.put('/:id/toggle-status', async (req, res) => {
 
 
 
+router.get("/writers-of-agent", async (req, res) => {
+  const { agent_id, platform_id } = req.query;
+
+  if (!agent_id || !platform_id) {
+    return res.status(400).json({ error: "agent_id and platform_id are required" });
+  }
+
+  try {
+    // Ensure the platform exists for this agent
+    const [platforms] = await db.execute(
+      "SELECT platform_reference FROM platforms WHERE platform_id = ? AND agent_id = ?",
+      [platform_id, agent_id]
+    );
+
+    if (platforms.length === 0) {
+      return res.status(404).json({ error: "Platform not found for this agent" });
+    }
+
+    const platformReference = platforms[0].platform_reference;
+
+    // Fetch writers for this agent (role = 'writer')
+    // Optional: filter writers already linked to this platform if needed
+    const [writers] = await db.execute(
+      "SELECT user_id, username, role_id, agent_id FROM users WHERE role = 'writer' AND agent_id = ?",
+      [agent_id]
+    );
+
+    res.json(writers);
+  } catch (err) {
+    console.error("Error fetching writers:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+
+
+router.get("/agent-platform-pos", async (req, res) => {
+  const { agent_id, platform_id } = req.query;
+
+  if (!agent_id || !platform_id) {
+    return res.status(400).json({ error: "agent_id and platform_id are required" });
+  }
+
+  try {
+    // Get platform reference for the platform_id
+    const [platforms] = await db.execute(
+      "SELECT platform_reference FROM platforms WHERE platform_id = ? AND agent_id = ?",
+      [platform_id, agent_id]
+    );
+
+    if (platforms.length === 0) {
+      return res.status(404).json({ error: "Platform not found for this agent" });
+    }
+
+    const platformReference = platforms[0].platform_reference;
+
+    // Fetch POS devices for this agent + platform reference
+    const [posDevices] = await db.execute(
+      "SELECT * FROM pos_devices WHERE agent_id = ? AND platform_reference = ?",
+      [agent_id, platformReference]
+    );
+
+    res.json(posDevices);
+  } catch (err) {
+    console.error("Error fetching POS devices:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+
+
 
 
 module.exports = router;
