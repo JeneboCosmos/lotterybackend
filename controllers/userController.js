@@ -262,25 +262,54 @@ exports.toggleUserStatus = async (req, res) => {
 
   logger.info(`Toggle user status - User ID: ${id}, is_enabled: ${is_enabled}`);
 
-  if (typeof is_enabled !== 'number' || ![0,1].includes(is_enabled)) {
+  if (typeof is_enabled !== 'number' || ![0, 1].includes(is_enabled)) {
     logger.warn(`Invalid toggle value - User ID: ${id}, is_enabled: ${is_enabled}`);
     return res.status(400).json({ msg: 'Invalid value for is_enabled (must be 0 or 1)' });
   }
 
   try {
-    const sql = 'UPDATE users SET is_enabled = ? WHERE user_id = ?';
-    const [result] = await db.query(sql, [is_enabled, id]);
-    if (result.affectedRows === 0) {
+    // Get user role first
+    const [[user]] = await db.query(
+      'SELECT role FROM users WHERE user_id = ?',
+      [id]
+    );
+
+    if (!user) {
       logger.warn(`Toggle failed - User not found: ID ${id}`);
       return res.status(404).json({ msg: 'User not found' });
     }
+
+    // Update user status
+    await db.query(
+      'UPDATE users SET is_enabled = ? WHERE user_id = ?',
+      [is_enabled, id]
+    );
+
+    // ✅ If user is an agent, cascade to platforms
+    if (user.role === 'agent') {
+      const platformStatus = is_enabled === 1 ? 'active' : 'inactive';
+
+      await db.query(
+        'UPDATE platforms SET status = ? WHERE agent_id = ?',
+        [platformStatus, id]
+      );
+
+      logger.info(
+        `Agent ${id} ${is_enabled ? 'enabled' : 'disabled'} → Platforms set to ${platformStatus}`
+      );
+    }
+
     logger.info(`User ${id} has been ${is_enabled ? 'enabled' : 'disabled'}`);
-    res.json({ msg: `User has been ${is_enabled ? 'enabled' : 'disabled'} successfully.` });
+
+    res.json({
+      msg: `User has been ${is_enabled ? 'enabled' : 'disabled'} successfully.`,
+    });
   } catch (err) {
     logger.error(`Error toggling user status - ID: ${id}, Error: ${err.message}`);
     res.status(500).json({ msg: err.message });
   }
 };
+
 
 // GET all writers for an agent
 exports.getWritersByAgent = async (req, res) => {
