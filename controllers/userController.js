@@ -323,3 +323,31 @@ exports.getWritersByAgent = async (req, res) => {
     res.status(500).json({ msg: 'Internal server error' });
   }
 };
+
+
+
+// CHANGE PASSWORD
+exports.changePassword = async (req, res) => {
+  const { user_id } = req.user; // assume JWT auth middleware sets req.user
+  const { currentPassword, newPassword } = req.body;
+
+  if (!currentPassword || !newPassword) {
+    return res.status(400).json({ msg: "Current and new passwords are required" });
+  }
+
+  try {
+    const [users] = await db.query("SELECT * FROM users WHERE user_id = ?", [user_id]);
+    if (users.length === 0) return res.status(404).json({ msg: "User not found" });
+
+    const user = users[0];
+    const isMatch = await bcrypt.compare(currentPassword, user.password);
+    if (!isMatch) return res.status(400).json({ msg: "Current password is incorrect" });
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    await db.query("UPDATE users SET password = ? WHERE user_id = ?", [hashedPassword, user_id]);
+
+    res.json({ msg: "Password changed successfully" });
+  } catch (err) {
+    res.status(500).json({ msg: err.message });
+  }
+};

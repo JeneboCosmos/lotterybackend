@@ -13,6 +13,7 @@ router.put('/users/:id', userController.updateUser); // Ensure this is a functio
 router.delete('/users/:id', userController.deleteUser); // Ensure this is a function in userController.js
 router.put('/users/:id/toggle', userController.toggleUserStatus);
 router.get('/agents/:agentId/writers', userController.getWritersByAgent);
+router.post('/change-password/:id', userController.changePassword);
 
 module.exports = router;
 
