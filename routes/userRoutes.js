@@ -1,8 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const userController = require('../controllers/userController');
-const { protect } = require('../middleware/auth');
-
+const auth = require('../middleware/auth');
 
 // Auth Routes
 router.post('/register', userController.register); // Ensure this is a function in userController.js
@@ -17,7 +16,7 @@ router.put('/users/:id/toggle', userController.toggleUserStatus);
 router.get('/agents/:agentId/writers', userController.getWritersByAgent);
 
 
-router.post('/change-password', protect, userController.changePassword);
+router.put('/change-password', auth, userController.changePassword);
 
 
 module.exports = router;
