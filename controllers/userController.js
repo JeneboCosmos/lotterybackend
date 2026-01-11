@@ -328,26 +328,66 @@ exports.getWritersByAgent = async (req, res) => {
 
 // CHANGE PASSWORD
 exports.changePassword = async (req, res) => {
-  const { user_id } = req.user; // assume JWT auth middleware sets req.user
+  const { user_id } = req.user; // set by JWT auth middleware
   const { currentPassword, newPassword } = req.body;
 
+  logger.info(`Password change attempt - User ID: ${user_id}`);
+
   if (!currentPassword || !newPassword) {
-    return res.status(400).json({ msg: "Current and new passwords are required" });
+    logger.warn(`Password change failed - Missing fields - User ID: ${user_id}`);
+    return res.status(400).json({
+      msg: 'Current password and new password are required',
+    });
+  }
+
+  // Optional: enforce basic password policy
+  if (newPassword.length < 8) {
+    logger.warn(`Weak password attempt - User ID: ${user_id}`);
+    return res.status(400).json({
+      msg: 'New password must be at least 8 characters long',
+    });
   }
 
   try {
-    const [users] = await db.query("SELECT * FROM users WHERE user_id = ?", [user_id]);
-    if (users.length === 0) return res.status(404).json({ msg: "User not found" });
+    const [[user]] = await db.query(
+      'SELECT password FROM users WHERE user_id = ?',
+      [user_id]
+    );
 
-    const user = users[0];
+    if (!user) {
+      logger.warn(`Password change failed - User not found - ID: ${user_id}`);
+      return res.status(404).json({ msg: 'User not found' });
+    }
+
     const isMatch = await bcrypt.compare(currentPassword, user.password);
-    if (!isMatch) return res.status(400).json({ msg: "Current password is incorrect" });
+    if (!isMatch) {
+      logger.warn(`Password change failed - Incorrect current password - ID: ${user_id}`);
+      return res.status(400).json({ msg: 'Current password is incorrect' });
+    }
+
+    // Prevent reusing old password
+    const isSamePassword = await bcrypt.compare(newPassword, user.password);
+    if (isSamePassword) {
+      logger.warn(`Password reuse attempt - User ID: ${user_id}`);
+      return res.status(400).json({
+        msg: 'New password must be different from the current password',
+      });
+    }
 
     const hashedPassword = await bcrypt.hash(newPassword, 10);
-    await db.query("UPDATE users SET password = ? WHERE user_id = ?", [hashedPassword, user_id]);
 
-    res.json({ msg: "Password changed successfully" });
+    await db.query(
+      'UPDATE users SET password = ? WHERE user_id = ?',
+      [hashedPassword, user_id]
+    );
+
+    logger.info(`Password changed successfully - User ID: ${user_id}`);
+
+    res.json({ msg: 'Password changed successfully' });
   } catch (err) {
-    res.status(500).json({ msg: err.message });
+    logger.error(
+      `Error changing password - User ID: ${user_id}, Error: ${err.message}`
+    );
+    res.status(500).json({ msg: 'Internal server error' });
   }
 };

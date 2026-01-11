@@ -5,7 +5,6 @@ const cors = require('cors');
 
 const transactionRoutes = require('./routes/transactionRoutes');
 const authRoutes = require('./routes/authRoutes');
-const contactRoutes = require('./routes/contactRoutes');
 const resultRoutes = require('./routes/resultRoutes');
 const gameRoutes = require('./routes/gameRoutes');
 const userRoutes = require('./routes/userRoutes');
@@ -41,7 +40,6 @@ app.use(bodyParser.json());
 app.use('/api', transactionRoutes);
 app.use('/api/game', gameRoutes);
 app.use('/api/auth', authRoutes);
-app.use('/api/contacts', contactRoutes);
 app.use('/api/results', resultRoutes);
 app.use('/api/', userRoutes);
 app.use('/api/combinations', combinationRoutes);
