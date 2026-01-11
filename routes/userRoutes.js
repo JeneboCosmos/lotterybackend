@@ -16,7 +16,9 @@ router.put('/users/:id/toggle', userController.toggleUserStatus);
 router.get('/agents/:agentId/writers', userController.getWritersByAgent);
 
 
-router.put('/change-password', auth, userController.changePassword);
+// CHANGE PASSWORD (NO JWT)
+router.put('/change-password', userController.changePassword);
+
 
 
 module.exports = router;

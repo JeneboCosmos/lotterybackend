@@ -324,39 +324,36 @@ exports.getWritersByAgent = async (req, res) => {
   }
 };
 
-// CHANGE PASSWORD
+// CHANGE PASSWORD (OPTION 1 - NO JWT)
 exports.changePassword = async (req, res) => {
-  const { user_id } = req.user; // coming from JWT middleware
-  const { current_password, new_password } = req.body;
+  const { user_id, current_password, new_password } = req.body;
 
-  logger.info(`Password change attempt - User ID: ${user_id}`);
-
-  if (!current_password || !new_password) {
-    logger.warn(`Password change failed - Missing fields, User ID: ${user_id}`);
-    return res.status(400).json({ msg: 'Current password and new password are required' });
+  if (!user_id || !current_password || !new_password) {
+    return res.status(400).json({
+      msg: 'user_id, current_password and new_password are required'
+    });
   }
 
   if (current_password === new_password) {
-    logger.warn(`Password change failed - Same password used, User ID: ${user_id}`);
-    return res.status(400).json({ msg: 'New password must be different from current password' });
+    return res.status(400).json({
+      msg: 'New password must be different from current password'
+    });
   }
 
   try {
-    // Fetch current password hash
+    // Fetch user's current password
     const [[user]] = await db.query(
       'SELECT password FROM users WHERE user_id = ?',
       [user_id]
     );
 
     if (!user) {
-      logger.warn(`Password change failed - User not found, ID: ${user_id}`);
       return res.status(404).json({ msg: 'User not found' });
     }
 
-    // Compare old password
+    // Verify current password
     const isMatch = await bcrypt.compare(current_password, user.password);
     if (!isMatch) {
-      logger.warn(`Password change failed - Incorrect current password, User ID: ${user_id}`);
       return res.status(400).json({ msg: 'Current password is incorrect' });
     }
 
@@ -369,12 +366,10 @@ exports.changePassword = async (req, res) => {
       [hashedPassword, user_id]
     );
 
-    logger.info(`Password changed successfully - User ID: ${user_id}`);
-
     res.json({ msg: 'Password changed successfully' });
 
   } catch (err) {
-    logger.error(`Error changing password - User ID: ${user_id}, Error: ${err.message}`);
+    console.error('Change password error:', err.message);
     res.status(500).json({ msg: 'Internal server error' });
   }
 };
