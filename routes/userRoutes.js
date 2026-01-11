@@ -1,6 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const userController = require('../controllers/userController');
+const { protect } = require('../middleware/auth');
+
 
 // Auth Routes
 router.post('/register', userController.register); // Ensure this is a function in userController.js
@@ -13,7 +15,10 @@ router.put('/users/:id', userController.updateUser); // Ensure this is a functio
 router.delete('/users/:id', userController.deleteUser); // Ensure this is a function in userController.js
 router.put('/users/:id/toggle', userController.toggleUserStatus);
 router.get('/agents/:agentId/writers', userController.getWritersByAgent);
-router.post('/change-password', userController.changePassword);
+
+
+router.post('/change-password', protect, userController.changePassword);
+
 
 module.exports = router;
 
