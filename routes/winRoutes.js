@@ -7,42 +7,42 @@ const { processDraw } = require('../controllers/winController');
 router.get('/', async (req, res) => {
   try {
     const [rows] = await pool.query(`
-      SELECT 
-        pr.play_result_id,
+      SELECT
         pr.is_win,
         pr.win_amount,
         pr.draw_date,
 
-        -- 🔗 Play fields
+        -- Play fields
         p.lines,
         p.stake,
         p.barcode,
         p.pos_id,
 
-        -- 🔗 User
+        -- User
         u.user_id,
         u.role_id,
         u.username AS user_name,
 
-        -- 🔗 Game
+        -- Game
         g.game_id,
         g.game_name,
 
-        -- 🔗 Combination
+        -- Combination
         c.combination_id,
         c.combination_name
 
       FROM play_result pr
-      INNER JOIN play p 
+
+      INNER JOIN play p
         ON pr.play_id = p.play_id
 
-      INNER JOIN users u 
+      INNER JOIN users u
         ON pr.user_id = u.user_id
 
-      INNER JOIN games g 
+      INNER JOIN games g
         ON pr.game_id = g.game_id
 
-      INNER JOIN combination_types c 
+      INNER JOIN combination_types c
         ON pr.combination_id = c.combination_id
 
       WHERE pr.is_win = 1
