@@ -4,14 +4,13 @@ const router = express.Router();
 const pool = require('../config/db');
 const { processDraw } = require('../controllers/winController');
 
-// GET all winning results
 router.get('/', async (req, res) => {
   try {
     const [rows] = await pool.query(`
       SELECT
         pr.is_win,
         pr.prize_amount,
-        
+        pr.created_at,
 
         -- All play table fields
         p.*,
@@ -44,7 +43,7 @@ router.get('/', async (req, res) => {
         ON pr.combination_id = c.combination_id
 
       WHERE pr.is_win = 1
-      ORDER BY pr.draw_date DESC
+      ORDER BY pr.created_at DESC
     `);
 
     res.status(200).json({
@@ -62,7 +61,6 @@ router.get('/', async (req, res) => {
   }
 });
 
-// POST: process draw
-router.post('/process', processDraw); // POST /api/results/process
+router.post('/process', processDraw);
 
 module.exports = router;
