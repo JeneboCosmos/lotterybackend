@@ -4,19 +4,17 @@ const router = express.Router();
 const pool = require('../config/db');
 const { processDraw } = require('../controllers/winController');
 
+// GET all winning results
 router.get('/', async (req, res) => {
   try {
     const [rows] = await pool.query(`
       SELECT
         pr.is_win,
-        pr.win_amount,
+        pr.prize_amount,
         pr.draw_date,
 
-        -- Play fields
-        p.lines,
-        p.stake,
-        p.barcode,
-        p.pos_id,
+        -- All play table fields
+        p.*,
 
         -- User
         u.user_id,
@@ -49,13 +47,22 @@ router.get('/', async (req, res) => {
       ORDER BY pr.draw_date DESC
     `);
 
-    res.json(rows);
-  } catch (err) {
-    console.error('Error fetching winning results:', err);
-    res.status(500).json({ error: 'Internal Server Error' });
+    res.status(200).json({
+      success: true,
+      data: rows
+    });
+
+  } catch (error) {
+    console.error('Error fetching winning results:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch winning results',
+      error: error.sqlMessage || error.message
+    });
   }
 });
 
-router.post('/process', processDraw); // POST /api/draw/process
+// POST: process draw
+router.post('/process', processDraw); // POST /api/results/process
 
 module.exports = router;
