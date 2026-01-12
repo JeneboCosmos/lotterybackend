@@ -11,7 +11,7 @@ router.get('/', async (req, res) => {
       SELECT
         pr.is_win,
         pr.prize_amount,
-        pr.draw_date,
+        
 
         -- All play table fields
         p.*,
