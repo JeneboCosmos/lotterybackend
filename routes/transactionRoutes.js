@@ -588,7 +588,33 @@ router.post("/pay-writers-batch", async (req, res) => {
     conn.release();
   }
 });
+router.get("/unpaid-wins/:writer_role_id", async (req, res) => {
+  const { writer_role_id } = req.params;
 
+  if (!writer_role_id) {
+    return res.status(400).json({ message: "Writer role_id is required" });
+  }
+
+  try {
+    const [tickets] = await db.query(
+      `SELECT result_id, ticket_number, prize_amount
+       FROM play_result
+       WHERE writer_role_id = ? AND payout_paid = 0`,
+      [writer_role_id]
+    );
+
+    // Calculate total unpaid amount
+    const total_amount = tickets.reduce((sum, t) => sum + parseFloat(t.prize_amount), 0);
+
+    res.json({
+      tickets,
+      total_amount,
+    });
+  } catch (err) {
+    console.error("Error fetching unpaid tickets:", err.message);
+    res.status(500).json({ message: "Server error fetching unpaid tickets" });
+  }
+});
 
 
 
