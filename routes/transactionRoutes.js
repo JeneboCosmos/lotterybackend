@@ -636,7 +636,7 @@ router.get("/unpaid-wins", async (req, res) => {
         pr.result_id,
         pr.ticket_number,
         pr.prize_amount,
-        pr.writer_role_id,
+        pr.user_id,
         u.username AS writer_name,
         pr.created_at
       FROM play_result pr
