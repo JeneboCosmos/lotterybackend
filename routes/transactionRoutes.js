@@ -542,7 +542,7 @@ router.post("/pay-writers-batch", async (req, res) => {
       await conn.query(
         `INSERT INTO transactions
          (transaction_ref, from_user_id, to_user_id, type, amount, status, timestamp, reference_note)
-         VALUES (?, ?, ?, 'Writer Winnings Payout', ?, 'completed', NOW(), ?)`,
+         VALUES (?, ?, ?, 'Writer payment', ?, 'completed', NOW(), ?)`,
         [transaction_ref, admin_user_id, writer.user_id, writerTotal, referenceNote]
       );
 
