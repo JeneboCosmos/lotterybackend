@@ -605,7 +605,7 @@ router.get("/unpaid-wins/:user_id", async (req, res) => {
         pr.created_at,
         u.username AS writer_name
       FROM play_result pr
-      JOIN users u ON u.id = pr.user_id
+      JOIN users u ON u.user_id = pr.user_id
       WHERE pr.user_id = ?
         AND pr.payout_paid = 0
       ORDER BY pr.created_at ASC
@@ -638,11 +638,17 @@ router.get("/unpaid-wins", async (req, res) => {
         pr.prize_amount,
         pr.user_id,
         u.username AS writer_name,
+        pr.game_id,
+        pr.draw_id,
+        pr.combination_id,
+        pr.selected_numbers,
+        pr.platform_reference,
+        pr.draw_id,
         pr.created_at
       FROM play_result pr
-      JOIN users u ON u.role_id = pr.user_id
+      JOIN users u ON u.user_id = pr.user_id
       WHERE pr.payout_paid = 0
-      ORDER BY pr.created_at ASC
+      ORDER BY pr.created_at ASC;
     `);
 
     const total_unpaid = rows.reduce(
