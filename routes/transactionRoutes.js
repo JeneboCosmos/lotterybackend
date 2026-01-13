@@ -588,16 +588,12 @@ router.post("/pay-writers-batch", async (req, res) => {
     conn.release();
   }
 });
-router.get("/unpaid-wins/:user_id", async (req, res) => {
+router.get("/unpaid-wins/:user_id?", async (req, res) => { 
   const { user_id } = req.params;
 
-  if (!user_id) {
-    return res.status(400).json({ message: "user_id is required" });
-  }
-
   try {
-    const [rows] = await db.query(
-      `
+    // Base SQL
+    let sql = `
       SELECT
         pr.result_id,
         pr.ticket_number,
@@ -629,10 +625,19 @@ router.get("/unpaid-wins/:user_id", async (req, res) => {
       JOIN users u 
         ON u.user_id = pr.user_id
       WHERE pr.payout_paid = 0
-      ORDER BY pr.created_at ASC;
-            `,
-      [user_id]
-    );
+    `;
+
+    const params = [];
+
+    // Add filtering if user_id is provided and not "all"
+    if (user_id && user_id !== "all") {
+      sql += " AND pr.user_id = ?";
+      params.push(user_id);
+    }
+
+    sql += " ORDER BY pr.created_at ASC;";
+
+    const [rows] = await db.query(sql, params);
 
     const total_amount = rows.reduce(
       (sum, r) => sum + Number(r.prize_amount),
@@ -641,7 +646,8 @@ router.get("/unpaid-wins/:user_id", async (req, res) => {
 
     res.json({
       tickets: rows,
-      total_amount
+      total_amount,
+      count: rows.length
     });
   } catch (err) {
     console.error("Error fetching unpaid wins:", err);
