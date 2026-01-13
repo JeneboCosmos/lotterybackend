@@ -487,48 +487,86 @@ router.post("/pay-writers-batch", async (req, res) => {
     await conn.beginTransaction();
 
     // Fetch dashboard balance
-    const [[dashboard]] = await conn.query(`SELECT * FROM dashboard_balance LIMIT 1`);
+    const [[dashboard]] = await conn.query(`SELECT balance FROM dashboard_balance LIMIT 1`);
     if (!dashboard) throw new Error("Dashboard balance record not found");
 
-    // Total amount to pay
-    const totalAmount = payments.reduce((sum, p) => sum + Number(p.amount || 0), 0);
-    if (dashboard.balance < totalAmount) throw new Error("Insufficient dashboard balance");
-
-    // Deduct total from dashboard
-    await conn.query(`UPDATE dashboard_balance SET balance = balance - ?`, [totalAmount]);
-
     const results = [];
+    let totalAmount = 0;
 
     for (const p of payments) {
-      const { writer_role_id, amount } = p;
-      if (!writer_role_id || !amount) continue;
+      const { writer_role_id } = p;
+      if (!writer_role_id) continue;
 
+      // Find writer
       const [[writer]] = await conn.query(
         `SELECT user_id, username, balance FROM users WHERE role_id = ? AND role='writer' LIMIT 1`,
         [writer_role_id]
       );
       if (!writer) continue;
 
+      // Fetch all unpaid winning play_results for this writer
+      const [unpaidWins] = await conn.query(
+        `SELECT result_id, play_id, ticket_number, prize_amount
+         FROM play_result
+         WHERE user_id = ? AND is_win = 1 AND payout_paid = 0`,
+        [writer.user_id]
+      );
+
+      if (!unpaidWins.length) continue; // No wins to pay
+
+      // Calculate total for this writer
+      const writerTotal = unpaidWins.reduce((sum, r) => sum + Number(r.prize_amount), 0);
+      totalAmount += writerTotal;
+
+      // Check if dashboard has enough balance
+      if (dashboard.balance < totalAmount) throw new Error("Insufficient dashboard balance");
+
       // Credit writer
       await conn.query(`UPDATE users SET balance = balance + ? WHERE user_id = ?`, [
-        amount,
+        writerTotal,
         writer.user_id,
       ]);
 
       // Log transaction
       const transaction_ref = `tx-writer-${uuidv4().slice(0, 8)}`;
+      const referenceNote = JSON.stringify({
+        payment_type: "ticket_winnings",
+        results: unpaidWins.map(r => ({
+          result_id: r.result_id,
+          play_id: r.play_id,
+          ticket_number: r.ticket_number,
+          prize_amount: r.prize_amount,
+        })),
+      });
+
       await conn.query(
-        `INSERT INTO transactions (transaction_ref, from_user_id, to_user_id, type, amount, status, timestamp)
-         VALUES (?, ?, ?, 'Writer Payment', ?, 'completed', NOW())`,
-        [transaction_ref, admin_user_id, writer.user_id, amount]
+        `INSERT INTO transactions
+         (transaction_ref, from_user_id, to_user_id, type, amount, status, timestamp, reference_note)
+         VALUES (?, ?, ?, 'Writer Winnings Payout', ?, 'completed', NOW(), ?)`,
+        [transaction_ref, admin_user_id, writer.user_id, writerTotal, referenceNote]
+      );
+
+      // Mark all these play_results as paid
+      const resultIds = unpaidWins.map(r => r.result_id);
+      await conn.query(
+        `UPDATE play_result
+         SET payout_paid = 1, payout_paid_at = NOW(), payout_transaction_ref = ?
+         WHERE result_id IN (?)`,
+        [transaction_ref, resultIds]
       );
 
       results.push({
         writer_role_id,
         writer_name: writer.username,
-        amount,
+        total_paid: writerTotal,
         transaction_ref,
+        tickets_paid: unpaidWins.map(r => r.ticket_number),
       });
+    }
+
+    // Deduct total from dashboard
+    if (totalAmount > 0) {
+      await conn.query(`UPDATE dashboard_balance SET balance = balance - ?`, [totalAmount]);
     }
 
     // Fetch updated dashboard balance
