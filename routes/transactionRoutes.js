@@ -588,31 +588,43 @@ router.post("/pay-writers-batch", async (req, res) => {
     conn.release();
   }
 });
-router.get("/unpaid-wins/:writer_role_id", async (req, res) => {
-  const { writer_role_id } = req.params;
+router.get("/unpaid-wins/:user_id", async (req, res) => {
+  const { user_id } = req.params;
 
-  if (!writer_role_id) {
-    return res.status(400).json({ message: "Writer role_id is required" });
+  if (!user_id) {
+    return res.status(400).json({ message: "user_id is required" });
   }
 
   try {
-    const [tickets] = await db.query(
-      `SELECT result_id, ticket_number, prize_amount
-       FROM play_result
-       WHERE writer_role_id = ? AND payout_paid = 0`,
-      [writer_role_id]
+    const [rows] = await db.query(
+      `
+      SELECT
+        pr.result_id,
+        pr.ticket_number,
+        pr.prize_amount,
+        pr.created_at,
+        u.username AS writer_name
+      FROM play_result pr
+      JOIN users u ON u.id = pr.user_id
+      WHERE pr.user_id = ?
+        AND pr.payout_paid = 0
+      ORDER BY pr.created_at ASC
+      `,
+      [user_id]
     );
 
-    // Calculate total unpaid amount
-    const total_amount = tickets.reduce((sum, t) => sum + parseFloat(t.prize_amount), 0);
+    const total_amount = rows.reduce(
+      (sum, r) => sum + Number(r.prize_amount),
+      0
+    );
 
     res.json({
-      tickets,
-      total_amount,
+      tickets: rows,
+      total_amount
     });
   } catch (err) {
-    console.error("Error fetching unpaid tickets:", err.message);
-    res.status(500).json({ message: "Server error fetching unpaid tickets" });
+    console.error("Error fetching unpaid wins:", err);
+    res.status(500).json({ message: "Server error fetching unpaid wins" });
   }
 });
 
