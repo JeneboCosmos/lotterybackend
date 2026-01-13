@@ -640,7 +640,7 @@ router.get("/unpaid-wins", async (req, res) => {
         u.username AS writer_name,
         pr.created_at
       FROM play_result pr
-      JOIN users u ON u.role_id = pr.writer_role_id
+      JOIN users u ON u.role_id = pr.user_id
       WHERE pr.payout_paid = 0
       ORDER BY pr.created_at ASC
     `);
