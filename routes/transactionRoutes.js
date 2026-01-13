@@ -602,8 +602,13 @@ router.get("/unpaid-wins/:user_id", async (req, res) => {
         pr.result_id,
         pr.ticket_number,
         pr.prize_amount,
+        pr.user_id,
+        pr.game_id,
+        pr.draw_id,
+        pr.combination_id,
         pr.created_at,
         u.username AS writer_name
+        u.role_id AS writer_role_id
       FROM play_result pr
       JOIN users u ON u.user_id = pr.user_id
       WHERE pr.user_id = ?
