@@ -616,6 +616,38 @@ router.get("/unpaid-wins/:writer_role_id", async (req, res) => {
   }
 });
 
+// GET /api/unpaid-wins
+router.get("/unpaid-wins", async (req, res) => {
+  try {
+    const [rows] = await db.query(`
+      SELECT
+        pr.result_id,
+        pr.ticket_number,
+        pr.prize_amount,
+        pr.writer_role_id,
+        u.username AS writer_name,
+        pr.created_at
+      FROM play_result pr
+      JOIN users u ON u.role_id = pr.writer_role_id
+      WHERE pr.payout_paid = 0
+      ORDER BY pr.created_at ASC
+    `);
+
+    const total_unpaid = rows.reduce(
+      (sum, r) => sum + Number(r.prize_amount), 0
+    );
+
+    res.json({
+      count: rows.length,
+      total_unpaid,
+      tickets: rows
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Failed to load unpaid winnings" });
+  }
+});
+
 
 
 
