@@ -588,12 +588,11 @@ router.post("/pay-writers-batch", async (req, res) => {
     conn.release();
   }
 });
-router.get("/unpaid-wins/:user_id?", async (req, res) => { 
+router.get("/unpaid-wins/:user_id", async (req, res) => {
   const { user_id } = req.params;
 
   try {
-    // Base SQL
-    let sql = `
+    const [rows] = await db.query(`
       SELECT
         pr.result_id,
         pr.ticket_number,
@@ -601,8 +600,6 @@ router.get("/unpaid-wins/:user_id?", async (req, res) => {
         pr.user_id,
         u.role_id,
         u.username AS writer_name,
-
-        -- From play table
         p.play_id,
         p.platform_id,
         p.pos_id,
@@ -613,44 +610,22 @@ router.get("/unpaid-wins/:user_id?", async (req, res) => {
         p.platform_reference AS play_platform_reference,
         p.play_date,
         p.draw_date,
-
-        -- Result info
         pr.game_id,
         pr.draw_id,
         pr.combination_id,
         pr.created_at
       FROM play_result pr
-      JOIN play p 
-        ON p.play_id = pr.play_id
-      JOIN users u 
-        ON u.user_id = pr.user_id
-      WHERE pr.payout_paid = 0
-    `;
+      JOIN play p ON p.play_id = pr.play_id
+      JOIN users u ON u.user_id = pr.user_id
+      WHERE pr.payout_paid = 0 AND pr.user_id = ?
+      ORDER BY pr.created_at ASC;
+    `, [user_id]);
 
-    const params = [];
+    const total_amount = rows.reduce((sum, r) => sum + Number(r.prize_amount), 0);
 
-    // Add filtering if user_id is provided and not "all"
-    if (user_id && user_id !== "all") {
-      sql += " AND pr.user_id = ?";
-      params.push(user_id);
-    }
-
-    sql += " ORDER BY pr.created_at ASC;";
-
-    const [rows] = await db.query(sql, params);
-
-    const total_amount = rows.reduce(
-      (sum, r) => sum + Number(r.prize_amount),
-      0
-    );
-
-    res.json({
-      tickets: rows,
-      total_amount,
-      count: rows.length
-    });
+    res.json({ tickets: rows, total_amount, count: rows.length });
   } catch (err) {
-    console.error("Error fetching unpaid wins:", err);
+    console.error("Error fetching unpaid wins for user:", err);
     res.status(500).json({ message: "Server error fetching unpaid wins" });
   }
 });
