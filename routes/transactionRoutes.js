@@ -685,30 +685,6 @@ router.get("/unpaid-wins", async (req, res) => {
 });
 
 
-router.get("/:transaction_ref", async (req, res) => {
-  const { transaction_ref } = req.params;
-
-  try {
-    const [rows] = await db.execute(
-      `SELECT 
-         result_id,
-         ticket_number,
-         user_id AS role_id,
-         prize_amount,
-         platform_reference AS play_platform_reference,
-         created_at
-       FROM play_result
-       WHERE payout_transaction_ref = ?`,
-      [transaction_ref]
-    );
-
-    return res.json(rows);
-  } catch (err) {
-    console.error("Error fetching transaction tickets:", err);
-    return res.status(500).json({ message: "Server error" });
-  }
-});
-
 
 
 
