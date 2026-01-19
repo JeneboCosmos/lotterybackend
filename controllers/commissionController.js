@@ -125,7 +125,7 @@ const applyAllPendingCommissions = async (req, res) => {
 
     // Log total commission and bonuses in commission_logs with log_type
     await connection.execute(
-      `INSERT INTO commission_logs (log_type, total_amount, total_writers, applied_by)
+      `INSERT INTO commission_logs (log_type, total_commission, total_writers, applied_by)
        VALUES ('commission', ?, ?, ?)`,
       [totalCommission, results.length, adminId]
     );
