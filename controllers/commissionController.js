@@ -1,8 +1,8 @@
 const db = require('../config/db');
 
-/* =========================================================
-   ADMIN SETS COMMISSION OR BONUS RULE (INDEPENDENT)
-========================================================= */
+// ============================
+// Admin sets commission rule
+// ============================
 const setCommission = async (req, res) => {
   const { commissionType, amount, bonus_amount, threshold } = req.body;
 
@@ -10,36 +10,26 @@ const setCommission = async (req, res) => {
     return res.status(400).json({ message: "commissionType is required" });
   }
 
-  if (
-    (commissionType === "flat" || commissionType === "percentage") &&
-    (amount === undefined || amount === null)
-  ) {
-    return res.status(400).json({
-      message: "Amount is required for flat or percentage commission"
-    });
+  // For flat or percentage (optional for legacy)
+  if ((commissionType === "flat" || commissionType === "percentage") && (amount === undefined || amount === null)) {
+    return res.status(400).json({ message: "Amount is required for flat or percentage commission" });
   }
 
-  if (
-    commissionType === "bonus" &&
-    (bonus_amount === undefined || threshold === undefined)
-  ) {
-    return res.status(400).json({
-      message: "bonus_amount and threshold are required for bonus commission"
-    });
+  // For bonus
+  if (commissionType === "bonus" && (bonus_amount === undefined || threshold === undefined)) {
+    return res.status(400).json({ message: "bonus_amount and threshold are required for bonus commission" });
   }
 
-  const connection = await db.getConnection();
   try {
-    // 🔒 Delete ONLY same commission type
-    await connection.execute(
-      `DELETE FROM commissions WHERE commissionType = ?`,
-      [commissionType]
-    );
+    const connection = await db.getConnection();
 
+    // Only delete existing rule of the same type
+    await connection.execute(`DELETE FROM commissions WHERE commissionType = ?`, [commissionType]);
+
+    // Insert commission/bonus rule
     await connection.execute(
-      `INSERT INTO commissions 
-      (commissionType, amount, bonus_amount, threshold, is_active)
-      VALUES (?, ?, ?, ?, 1)`,
+      `INSERT INTO commissions (commissionType, amount, bonus_amount, threshold, is_active)
+       VALUES (?, ?, ?, ?, 1)`,
       [
         commissionType,
         amount || 0,
@@ -48,28 +38,24 @@ const setCommission = async (req, res) => {
       ]
     );
 
+    connection.release();
     res.json({
-      success: true,
-      message: `${commissionType} rule saved successfully`,
-      data: { commissionType, amount, bonus_amount, threshold }
+      message: "Commission/Bonus rule set successfully",
+      commissionType,
+      amount: amount || 0,
+      bonus_amount: bonus_amount || 0,
+      threshold: threshold || 0
     });
 
   } catch (error) {
     console.error("Error setting commission:", error);
-    res.status(500).json({
-      success: false,
-      message: "Error setting commission",
-      error: error.message
-    });
-  } finally {
-    connection.release();
+    res.status(500).json({ message: "Error setting commission", error: error.message });
   }
 };
 
-
-/* =========================================================
-   APPLY COMMISSION TO ALL PENDING PLAYS (NO BONUS)
-========================================================= */
+// ============================
+// Apply all pending commissions
+// ============================
 const applyAllPendingCommissions = async (req, res) => {
   const adminId = req.body.admin_id || null;
   const connection = await db.getConnection();
@@ -77,375 +63,358 @@ const applyAllPendingCommissions = async (req, res) => {
   try {
     await connection.beginTransaction();
 
-    const [rules] = await connection.execute(
-      `SELECT * FROM commissions
-       WHERE commissionType IN ('flat','percentage')
-       AND is_active = 1`
-    );
-
+    // Get active rules
+    const [rules] = await connection.execute(`SELECT * FROM commissions WHERE is_active = 1`);
     if (!rules.length) {
-      throw new Error("No active commission rules found");
+      await connection.rollback();
+      connection.release();
+      return res.status(400).json({ message: "No active commission/bonus rules found" });
     }
 
+    // Get pending sales
     const [sales] = await connection.execute(
       `SELECT p.play_id, p.price, p.user_id, u.username
        FROM play p
-       JOIN users u ON u.user_id = p.user_id
+       JOIN users u ON p.user_id = u.user_id
        WHERE p.commission_applied = 0`
     );
 
     if (!sales.length) {
       await connection.rollback();
+      connection.release();
       return res.json({ message: "No pending commissions found" });
     }
 
-    let totalCommission = 0;
     const results = [];
+    let totalCommission = 0;
+    let totalBonus = 0;
 
     for (const sale of sales) {
-      let commissionAmount = 0;
-
       for (const rule of rules) {
-        if (rule.commissionType === 'flat') {
-          commissionAmount += rule.amount;
-        } else if (rule.commissionType === 'percentage') {
-          commissionAmount += (sale.price * rule.amount) / 100;
+        if (rule.commissionType === "flat" || rule.commissionType === "percentage") {
+          let commissionAmount = rule.commissionType === "flat" ? rule.amount : (sale.price * rule.amount) / 100;
+
+          await connection.execute(
+            `INSERT INTO writer_commissions 
+             (user_id, play_id, commission_type, commission_amount, status, created_at)
+             VALUES (?, ?, 'commission', ?, 'pending', NOW())`,
+            [sale.user_id, sale.play_id, commissionAmount]
+          );
+
+          totalCommission += commissionAmount;
+        }
+
+        if (rule.commissionType === "bonus" && rule.bonus_amount > 0) {
+          await connection.execute(
+            `INSERT INTO writer_commissions 
+             (user_id, play_id, commission_type, commission_amount, status, created_at)
+             VALUES (?, NULL, 'bonus', ?, 'pending', NOW())`,
+            [sale.user_id, rule.bonus_amount]
+          );
+
+          totalBonus += rule.bonus_amount;
         }
       }
 
-      totalCommission += commissionAmount;
-
       await connection.execute(
-        `INSERT INTO writer_commissions
-        (user_id, play_id, commission_type, commission_amount, status, created_at)
-        VALUES (?, ?, 'commission', ?, 'pending', NOW())`,
-        [sale.user_id, sale.play_id, commissionAmount]
-      );
-
-      await connection.execute(
-        `UPDATE play
-         SET commission_applied = 1,
-             commission_amount = ?
-         WHERE play_id = ?`,
-        [commissionAmount, sale.play_id]
+        `UPDATE play SET commission_applied = 1 WHERE play_id = ?`,
+        [sale.play_id]
       );
 
       results.push({
         writer: sale.username,
-        play_id: sale.play_id,
-        gross: sale.price,
-        commission: commissionAmount
+        gross: sale.price
       });
     }
 
+    // Log commission & bonus
     await connection.execute(
-      `INSERT INTO commission_logs
-      (log_type, total_commission, total_writers, applied_by)
-      VALUES ('commission', ?, ?, ?)`,
-      [totalCommission, results.length, adminId]
+      `INSERT INTO commission_logs (log_type, total_commission, total_writers, applied_by)
+       VALUES (?, ?, ?, ?)`,
+      ['commission', totalCommission, results.length, adminId]
+    );
+
+    await connection.execute(
+      `INSERT INTO commission_logs (log_type, total_commission, total_writers, applied_by)
+       VALUES (?, ?, ?, ?)`,
+      ['bonus', totalBonus, results.length, adminId]
     );
 
     await connection.commit();
+    connection.release();
 
     res.json({
-      success: true,
-      message: "All commissions applied successfully",
-      totalCommission,
+      message: "All pending commissions and bonuses applied successfully",
       applied: results.length,
+      totalCommission,
+      totalBonus,
       details: results
     });
 
   } catch (error) {
     await connection.rollback();
-    console.error("Error applying commissions:", error);
-    res.status(500).json({
-      success: false,
-      message: "Error applying commissions",
-      error: error.message
-    });
-  } finally {
     connection.release();
+    console.error("Error applying commissions:", error);
+    res.status(500).json({ message: "Error applying commissions", error: error.message });
   }
 };
 
-
-/* =========================================================
-   APPLY COMMISSION ON TRANSACTION (AGENT → WRITER)
-========================================================= */
+// ============================
+// Apply commission on single transaction
+// ============================
 const applyCommissionOnTransaction = async (transactionId) => {
   const connection = await db.getConnection();
 
   try {
     const [[tx]] = await connection.execute(
-      `SELECT t.id, t.sender_id, t.receiver_id,
-              s.role AS sender_role,
-              r.role AS receiver_role
+      `SELECT t.id, t.sender_id, t.receiver_id, t.amount,
+              s.role AS sender_role, r.role AS receiver_role
        FROM transactions t
-       JOIN users s ON s.user_id = t.sender_id
-       JOIN users r ON r.user_id = t.receiver_id
+       JOIN users s ON t.sender_id = s.user_id
+       JOIN users r ON t.receiver_id = r.user_id
        WHERE t.id = ?`,
       [transactionId]
     );
 
     if (!tx || tx.sender_role !== 'agent' || tx.receiver_role !== 'writer') {
+      connection.release();
       return;
     }
 
-    // Commission already applied via play table
+    console.log(`Commission already included in writer's balance for transaction ${transactionId}`);
+
   } catch (error) {
-    console.error("Error in applyCommissionOnTransaction:", error);
+    console.error("Error applying commission on transaction:", error);
   } finally {
     connection.release();
   }
 };
 
-
-/* =========================================================
-   VIEW COMMISSION LOGS
-========================================================= */
-const getCommissionLogs = async (req, res) => {
-  const connection = await db.getConnection();
-
-  try {
-    const [logs] = await connection.execute(
-      `SELECT cl.*, u.username AS applied_by_name
-       FROM commission_logs cl
-       LEFT JOIN users u ON u.user_id = cl.applied_by
-       ORDER BY cl.applied_at DESC`
-    );
-
-    res.json({
-      success: true,
-      message: "Commission logs fetched successfully",
-      logs
-    });
-  } catch (error) {
-    console.error("Error fetching logs:", error);
-    res.status(500).json({
-      success: false,
-      message: "Error fetching logs",
-      error: error.message
-    });
-  } finally {
-    connection.release();
-  }
-};
-
-
-/* =========================================================
-   APPLY YEAR-END BONUS (INDEPENDENT)
-========================================================= */
+// ============================
+// Calculate year-end bonus
+// ============================
 const calculateYearEndBonus = async (req, res) => {
   const year = new Date().getFullYear();
-  const adminId = req.body.admin_id || null;
   const connection = await db.getConnection();
 
   try {
     const [[rule]] = await connection.execute(
-      `SELECT * FROM commissions
-       WHERE commissionType = 'bonus'
-       AND is_active = 1`
+      `SELECT * FROM commissions WHERE commissionType = 'bonus' AND is_active = 1 LIMIT 1`
     );
 
     if (!rule) {
-      return res.status(400).json({ message: "No active bonus rule found" });
+      connection.release();
+      return res.status(400).json({ message: "No active bonus rule set" });
     }
 
     const [writers] = await connection.execute(
-      `SELECT u.user_id, u.username, SUM(p.price) AS total_sales
-       FROM users u
-       JOIN play p ON p.user_id = u.user_id
-       WHERE u.role = 'writer'
-       AND YEAR(p.created_at) = ?
-       GROUP BY u.user_id`,
+      `SELECT w.user_id, w.username, COALESCE(SUM(p.price),0) AS total_sales
+       FROM users w
+       JOIN play p ON w.user_id = p.user_id
+       WHERE w.role = 'writer' AND YEAR(p.created_at) = ?
+       GROUP BY w.user_id, w.username`,
       [year]
     );
 
-    let totalBonus = 0;
     const bonuses = [];
+    let totalBonus = 0;
 
     for (const writer of writers) {
       if (writer.total_sales >= rule.threshold) {
         await connection.execute(
-          `INSERT INTO writer_commissions
-          (user_id, commission_type, commission_amount, status, created_at)
-          VALUES (?, 'bonus', ?, 'completed', NOW())`,
-          [writer.user_id, rule.bonus_amount]
+          `UPDATE users SET balance = balance + ? WHERE user_id = ?`,
+          [rule.bonus_amount, writer.user_id]
         );
 
-        totalBonus += rule.bonus_amount;
         bonuses.push({
           writer: writer.username,
+          total_sales: writer.total_sales,
           bonus: rule.bonus_amount
         });
+
+        totalBonus += rule.bonus_amount;
       }
     }
 
-    await connection.execute(
-      `INSERT INTO commission_logs
-      (log_type, total_commission, total_writers, applied_by)
-      VALUES ('bonus', ?, ?, ?)`,
-      [totalBonus, bonuses.length, adminId]
-    );
+    // Log bonus
+    if (totalBonus > 0) {
+      await connection.execute(
+        `INSERT INTO commission_logs (log_type, total_commission, total_writers, applied_by)
+         VALUES ('bonus', ?, ?, ?)`,
+        [totalBonus, bonuses.length, req.body.admin_id || null]
+      );
+    }
 
-    res.json({
-      success: true,
-      year,
-      totalBonus,
-      bonuses
-    });
+    connection.release();
+    res.json({ message: `Year-end bonuses applied for ${year}`, totalBonus, bonuses });
 
   } catch (error) {
-    console.error("Error applying bonus:", error);
-    res.status(500).json({
-      success: false,
-      message: "Error applying bonus",
-      error: error.message
-    });
+    connection.release();
+    console.error("Error applying year-end bonus:", error);
+    res.status(500).json({ message: "Error applying year-end bonus", error: error.message });
+  }
+};
+
+// ============================
+// Commission logs
+// ============================
+const getCommissionLogs = async (req, res) => {
+  const connection = await db.getConnection();
+
+  try {
+    const [logs] = await connection.execute(`
+      SELECT cl.*, u.username AS applied_by_name
+      FROM commission_logs cl
+      LEFT JOIN users u ON cl.applied_by = u.user_id
+      ORDER BY cl.applied_at DESC
+    `);
+
+    res.json({ success: true, message: "Commission logs fetched", logs });
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, message: "Error fetching logs", error: error.message });
   } finally {
     connection.release();
   }
 };
 
-
-/* =========================================================
-   FINANCIAL SUMMARY
-========================================================= */
+// ============================
+// Financial summary
+// ============================
 const getFinancialSummary = async (req, res) => {
   const connection = await db.getConnection();
 
   try {
     const { startDate, endDate } = req.query;
-    let condition = "";
-    let params = [];
+    let dateCondition = "";
+    let dateParams = [];
 
     if (startDate && endDate) {
-      condition = "AND created_at BETWEEN ? AND ?";
-      params = [startDate, endDate];
+      dateCondition = " AND created_at BETWEEN ? AND ?";
+      dateParams = [startDate, endDate];
     }
 
-    const [[gross]] = await connection.execute(
-      `SELECT COALESCE(SUM(price),0) AS gross
-       FROM play WHERE 1=1 ${condition}`,
-      params
+    const [[grossResult]] = await connection.execute(
+      `SELECT COALESCE(SUM(price),0) AS gross FROM play WHERE 1=1 ${dateCondition}`, dateParams
     );
 
-    const [[commission]] = await connection.execute(
-      `SELECT COALESCE(SUM(commission_amount),0) AS totalCommission
-       FROM writer_commissions
-       WHERE commission_type = 'commission' ${condition}`,
-      params
+    const [[commissionResult]] = await connection.execute(
+      `SELECT COALESCE(SUM(commission_amount),0) AS total_commission 
+       FROM writer_commissions WHERE commission_type='commission' ${dateCondition}`, dateParams
     );
 
-    const [[bonus]] = await connection.execute(
-      `SELECT COALESCE(SUM(commission_amount),0) AS totalBonus
-       FROM writer_commissions
-       WHERE commission_type = 'bonus' ${condition}`,
-      params
+    const [[bonusResult]] = await connection.execute(
+      `SELECT COALESCE(SUM(commission_amount),0) AS total_bonus 
+       FROM writer_commissions WHERE commission_type='bonus' ${dateCondition}`, dateParams
     );
+
+    const gross = parseFloat(grossResult.gross || 0);
+    const totalCommission = parseFloat(commissionResult.total_commission || 0);
+    const totalBonus = parseFloat(bonusResult.total_bonus || 0);
+    const net = gross - totalCommission;
 
     res.json({
       success: true,
-      summary: {
-        gross: gross.gross,
-        totalCommission: commission.totalCommission,
-        totalBonus: bonus.totalBonus,
-        net: gross.gross - commission.totalCommission
-      }
+      message: "Financial summary fetched",
+      summary: { gross, totalCommission, totalBonus, net }
     });
 
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error(error);
+    res.status(500).json({ success: false, message: "Error fetching summary", error: error.message });
   } finally {
     connection.release();
   }
 };
 
-
-/* =========================================================
-   AGENT PLATFORM SUMMARY
-========================================================= */
+// ============================
+// Agent platform summary
+// ============================
 const getAgentPlatformSummary = async (req, res) => {
-  const { agent_id, platform_id } = req.query;
+  const agent_id = req.query.agent_id?.trim();
+  const platform_id = req.query.platform_id?.trim();
 
   if (!agent_id || !platform_id) {
-    return res.status(400).json({ message: "agent_id and platform_id required" });
+    return res.status(400).json({ message: "agent_id and platform_id are required" });
   }
 
   const connection = await db.getConnection();
 
   try {
     const [writers] = await connection.execute(
-      `SELECT user_id FROM users
-       WHERE agent_id = ? AND platform_id = ? AND role = 'writer'`,
+      `SELECT user_id FROM users WHERE agent_id=? AND platform_id=? AND role='writer'`,
       [agent_id, platform_id]
     );
 
     if (!writers.length) {
-      return res.json({ gross: 0, totalCommission: 0, net: 0 });
+      connection.release();
+      return res.json({
+        message: "No writers found",
+        summary: { gross: 0, totalCommission: 0, net: 0, is_commission: false }
+      });
     }
 
-    const ids = writers.map(w => w.user_id);
-    const placeholders = ids.map(() => '?').join(',');
+    const writerIds = writers.map(w => w.user_id);
+    const placeholders = writerIds.map(() => '?').join(',');
 
-    const [[gross]] = await connection.execute(
-      `SELECT COALESCE(SUM(price),0) AS gross
-       FROM play WHERE user_id IN (${placeholders})`,
-      ids
+    const [[grossResult]] = await connection.execute(
+      `SELECT COALESCE(SUM(price),0) AS gross FROM play WHERE user_id IN (${placeholders})`,
+      writerIds
     );
 
-    const [[commission]] = await connection.execute(
-      `SELECT COALESCE(SUM(commission_amount),0) AS totalCommission
-       FROM play
-       WHERE commission_applied = 1 AND user_id IN (${placeholders})`,
-      ids
+    const [[commissionResult]] = await connection.execute(
+      `SELECT COALESCE(SUM(commission_amount),0) AS totalCommission 
+       FROM writer_commissions 
+       WHERE user_id IN (${placeholders}) AND commission_type='commission'`,
+      writerIds
     );
+
+    const gross = parseFloat(grossResult.gross || 0);
+    const totalCommission = parseFloat(commissionResult.totalCommission || 0);
+    const net = gross - totalCommission;
+    const is_commission = totalCommission > 0;
 
     res.json({
-      gross: gross.gross,
-      totalCommission: commission.totalCommission,
-      net: gross.gross - commission.totalCommission
+      success: true,
+      message: "Agent platform summary fetched",
+      summary: { platform_id, total_writers: writers.length, gross, totalCommission, net, is_commission }
     });
 
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error(error);
+    res.status(500).json({ success: false, message: "Error fetching agent platform summary", error: error.message });
   } finally {
     connection.release();
   }
 };
 
-
-/* =========================================================
-   GET CURRENT ACTIVE COMMISSION RULE
-========================================================= */
+// ============================
+// Get current commission rule
+// ============================
 const getCurrentCommission = async (req, res) => {
   const connection = await db.getConnection();
 
   try {
     const [[rule]] = await connection.execute(
-      `SELECT * FROM commissions WHERE is_active = 1 LIMIT 1`
+      `SELECT * FROM commissions WHERE is_active=1 LIMIT 1`
     );
 
     if (!rule) {
-      return res.status(404).json({ message: "No active rule found" });
+      connection.release();
+      return res.status(404).json({ message: "No active commission rule found" });
     }
 
-    res.json({
-      success: true,
-      commission: rule
-    });
+    res.json({ success: true, message: "Current commission rule fetched", commission: rule });
 
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error(error);
+    res.status(500).json({ success: false, message: "Error fetching commission", error: error.message });
   } finally {
     connection.release();
   }
 };
 
-
-/* =========================================================
-   EXPORTS
-========================================================= */
 module.exports = {
   setCommission,
   applyAllPendingCommissions,
