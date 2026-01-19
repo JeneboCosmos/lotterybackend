@@ -375,6 +375,63 @@ exports.changePassword = async (req, res) => {
 };
 
 
+// RESET PASSWORD (ADMIN CANNOT RESET OTHER ADMINS)
+exports.resetPassword = async (req, res) => {
+  const { admin_user_id, target_user_id, new_password } = req.body;
+
+  if (!admin_user_id || !target_user_id || !new_password) {
+    return res.status(400).json({
+      msg: 'admin_user_id, target_user_id, and new_password are required'
+    });
+  }
+
+  try {
+    // Fetch the admin's role
+    const [[admin]] = await db.query(
+      'SELECT role FROM users WHERE user_id = ?',
+      [admin_user_id]
+    );
+
+    if (!admin) {
+      return res.status(404).json({ msg: 'Admin user not found' });
+    }
+
+    // Only admins can reset passwords for others
+    if (admin.role !== 'admin') {
+      return res.status(403).json({ msg: 'Only admin users can reset passwords for other users' });
+    }
+
+    // Fetch target user
+    const [[targetUser]] = await db.query(
+      'SELECT user_id, role FROM users WHERE user_id = ?',
+      [target_user_id]
+    );
+
+    if (!targetUser) {
+      return res.status(404).json({ msg: 'Target user not found' });
+    }
+
+    // Admins cannot reset other admins
+    if (targetUser.role === 'admin') {
+      return res.status(403).json({ msg: 'Admins cannot reset passwords for other admins' });
+    }
+
+    // Hash the new password
+    const hashedPassword = await bcrypt.hash(new_password, 10);
+
+    // Update target user's password
+    await db.query(
+      'UPDATE users SET password = ? WHERE user_id = ?',
+      [hashedPassword, target_user_id]
+    );
+
+    res.json({ msg: `Password reset successfully for user ${target_user_id}` });
+
+  } catch (err) {
+    console.error('Reset password error:', err.message);
+    res.status(500).json({ msg: 'Internal server error' });
+  }
+};
 
 
 
