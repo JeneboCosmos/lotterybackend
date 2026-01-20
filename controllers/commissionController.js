@@ -26,7 +26,7 @@ const setCommission = async (req, res) => {
     // Only delete existing rule of the same type
     await connection.execute(`DELETE FROM commissions WHERE commissionType = ?`, [commissionType]);
 
-    // Insert commission/bonus rule
+    // Insert commission rule
     await connection.execute(
       `INSERT INTO commissions (commissionType, amount, bonus_amount, threshold, is_active)
        VALUES (?, ?, ?, ?, 1)`,
@@ -40,7 +40,7 @@ const setCommission = async (req, res) => {
 
     connection.release();
     res.json({
-      message: "Commission/Bonus rule set successfully",
+      message: "Commission rule set successfully",
       commissionType,
       amount: amount || 0,
       bonus_amount: bonus_amount || 0,

@@ -4,14 +4,21 @@ const router = express.Router();
 const pool = require('../config/db');
 const { processDraw } = require('../controllers/winController');
 
-
 router.get('/', async (req, res) => { 
   try {
     const [rows] = await pool.query(`
       SELECT 
         pr.*,
+
+        -- ✅ Convert payout_paid to readable status
+        CASE 
+          WHEN pr.payout_paid = 0 THEN 'Unpaid'
+          WHEN pr.payout_paid = 1 THEN 'Paid'
+          ELSE 'Unknown'
+        END AS payout_status,
+
         u.user_id AS user_id,
-        u.role_id AS role_id,            -- ✅ fixed this line
+        u.role_id AS role_id,
         u.username AS user_name,
         g.game_id AS game_id,
         g.game_name AS game_name,
@@ -32,11 +39,5 @@ router.get('/', async (req, res) => {
 });
 
 router.post('/process', processDraw);  // POST /api/draw/process
-
-
-
-
-
-
 
 module.exports = router;
