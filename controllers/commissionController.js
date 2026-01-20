@@ -392,24 +392,28 @@ const getAgentPlatformSummary = async (req, res) => {
 // ============================
 // Get current commission rule
 // ============================
+// ============================
+// Get all active commission rules
+// ============================
 const getCurrentCommission = async (req, res) => {
   const connection = await db.getConnection();
 
   try {
-    const [[rule]] = await connection.execute(
-      `SELECT * FROM commissions WHERE is_active=1 LIMIT 1`
+    // Fetch all active rules
+    const [rules] = await connection.execute(
+      `SELECT * FROM commissions WHERE is_active=1 ORDER BY commissionType ASC`
     );
 
-    if (!rule) {
+    if (!rules.length) {
       connection.release();
-      return res.status(404).json({ message: "No active commission rule found" });
+      return res.status(404).json({ message: "No active commission rules found" });
     }
 
-    res.json({ success: true, message: "Current commission rule fetched", commission: rule });
+    res.json({ success: true, message: "Active commission rules fetched", commissions: rules });
 
   } catch (error) {
     console.error(error);
-    res.status(500).json({ success: false, message: "Error fetching commission", error: error.message });
+    res.status(500).json({ success: false, message: "Error fetching commissions", error: error.message });
   } finally {
     connection.release();
   }
