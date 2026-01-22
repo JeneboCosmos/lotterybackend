@@ -129,20 +129,22 @@ exports.deletePosDevice = async (req, res) => {
   }
 };
 
-exports.getPosDevices = async (req, res) => {
-  const { agent_id, platform_id } = req.query;
+// controllers/posController.js
+const pool = require('../config/db');
 
-  if (!agent_id || !platform_id) {
-    return res.status(400).json({ message: 'Agent ID and Platform ID required' });
+exports.getPosDevices = async (req, res) => {
+  const { agent_id, platform_reference } = req.query;
+
+  if (!agent_id || !platform_reference) {
+    return res.status(400).json({ message: 'Agent ID and platform_reference required' });
   }
 
   try {
     const [pos] = await pool.query(
-      `SELECT pos_reference
-       FROM pos_devices
-       WHERE agent_id = ?
-       AND platform_id = ?`,
-      [agent_id, platform_id]
+      `SELECT pos_id, pos_reference, agent_id, writer_id, platform_reference
+       FROM pos_device
+       WHERE agent_id = ? AND platform_reference = ?`,
+      [agent_id, platform_reference]
     );
 
     res.json({ pos });
@@ -169,7 +171,7 @@ exports.assignPosToWriter = async (req, res) => {
   try {
     // 1️⃣ Check POS belongs to this agent + platform
     const [[pos]] = await pool.query(
-      `SELECT pos_id, writer_id FROM pos_device
+      `SELECT pos_id, writer_id FROM pos_devices
        WHERE pos_id = ? AND agent_id = ? AND platform_reference = ?`,
       [pos_id, agent_id, platform_reference]
     );
