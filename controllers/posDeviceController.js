@@ -128,3 +128,69 @@ exports.deletePosDevice = async (req, res) => {
     res.status(500).json({ msg: 'Internal server error' });
   }
 };
+
+exports.getPosDevices = async (req, res) => {
+  const { agent_id, platform_id } = req.query;
+
+  if (!agent_id || !platform_id) {
+    return res.status(400).json({ message: 'Agent ID and Platform ID required' });
+  }
+
+  try {
+    const [pos] = await pool.query(
+      `SELECT pos_reference
+       FROM pos_devices
+       WHERE agent_id = ?
+       AND platform_id = ?`,
+      [agent_id, platform_id]
+    );
+
+    res.json({ pos });
+  } catch (error) {
+    console.error('Error fetching POS devices:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+
+
+
+
+// controllers/assignmentController.js
+
+
+exports.assignPosToWriter = async (req, res) => {
+  const { pos_id, writer_id, agent_id, platform_reference } = req.body;
+
+  if (!pos_id || !writer_id || !agent_id || !platform_reference) {
+    return res.status(400).json({ message: 'All fields are required' });
+  }
+
+  try {
+    // 1️⃣ Check POS belongs to this agent + platform
+    const [[pos]] = await pool.query(
+      `SELECT pos_id, writer_id FROM pos_device
+       WHERE pos_id = ? AND agent_id = ? AND platform_reference = ?`,
+      [pos_id, agent_id, platform_reference]
+    );
+
+    if (!pos) return res.status(404).json({ message: 'POS not found for this agent and platform' });
+
+    // 2️⃣ Check if POS already assigned
+    if (pos.writer_id) {
+      return res.status(400).json({ message: 'POS is already assigned to a writer' });
+    }
+
+    // 3️⃣ Assign POS to writer
+    await pool.query(
+      `UPDATE pos_device SET writer_id = ? WHERE pos_id = ?`,
+      [writer_id, pos_id]
+    );
+
+    res.json({ message: 'POS successfully assigned to writer' });
+
+  } catch (error) {
+    console.error('Error assigning POS:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};

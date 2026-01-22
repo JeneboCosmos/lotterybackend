@@ -8,5 +8,7 @@ router.get('/', posDeviceController.getAllPosDevices);
 router.get('/:id', posDeviceController.getPosDeviceById);
 router.put('/:id', posDeviceController.updatePosDevice);
 router.delete('/:id', posDeviceController.deletePosDevice);
+router.get('/pos-of-agent', posDeviceController.getPosDevices);
+router.post('/assign-pos-to-writer', posDeviceController.assignPosToWriter);
 
 module.exports = router;
