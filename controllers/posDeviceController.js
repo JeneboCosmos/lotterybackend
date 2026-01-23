@@ -1,4 +1,4 @@
-const db = require('../config/db');
+const db = require('../config/db'); // import the MySQL pool
 
 // 🟩 CREATE POS DEVICE
 exports.createPosDevice = async (req, res) => {
@@ -20,7 +20,6 @@ exports.createPosDevice = async (req, res) => {
     // 2️⃣ Determine new POS reference safely
     let newPosRef = '';
     if (lastPos.length === 0 || !lastPos[0].pos_reference) {
-      // No previous POS or pos_reference is null
       newPosRef = `${platform_reference}-001`;
     } else {
       const lastNumber = parseInt(lastPos[0].pos_reference.split('-')[1] || '0');
@@ -60,7 +59,17 @@ exports.getAllPosDevices = async (req, res) => {
 };
 
 // 🟨 READ SINGLE POS DEVICE BY ID
-
+exports.getPosDeviceById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const [rows] = await db.query('SELECT * FROM pos_devices WHERE pos_id = ?', [id]);
+    if (rows.length === 0) return res.status(404).json({ msg: 'POS device not found' });
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('❌ Error fetching POS device:', err.message);
+    res.status(500).json({ msg: 'Internal server error' });
+  }
+};
 
 // 🟧 UPDATE POS DEVICE
 exports.updatePosDevice = async (req, res) => {
@@ -69,9 +78,7 @@ exports.updatePosDevice = async (req, res) => {
     const { serial_number, device_model, writer_id, agent_id, platform_reference, status, last_login } = req.body;
 
     const [existing] = await db.query('SELECT * FROM pos_devices WHERE pos_id = ?', [id]);
-    if (existing.length === 0) {
-      return res.status(404).json({ msg: 'POS device not found' });
-    }
+    if (existing.length === 0) return res.status(404).json({ msg: 'POS device not found' });
 
     await db.query(
       `UPDATE pos_devices 
@@ -103,9 +110,7 @@ exports.deletePosDevice = async (req, res) => {
     const { id } = req.params;
 
     const [existing] = await db.query('SELECT * FROM pos_devices WHERE pos_id = ?', [id]);
-    if (existing.length === 0) {
-      return res.status(404).json({ msg: 'POS device not found' });
-    }
+    if (existing.length === 0) return res.status(404).json({ msg: 'POS device not found' });
 
     await db.query('DELETE FROM pos_devices WHERE pos_id = ?', [id]);
     res.json({ msg: 'POS device deleted successfully' });
@@ -115,9 +120,7 @@ exports.deletePosDevice = async (req, res) => {
   }
 };
 
-// controllers/posController.js
-
-
+// 🟦 GET POS DEVICES BY AGENT AND PLATFORM
 exports.getPosDevices = async (req, res) => {
   let { agent_id, platform_reference } = req.query;
 
@@ -128,12 +131,10 @@ exports.getPosDevices = async (req, res) => {
   }
 
   agent_id = Number(agent_id);
-  if (isNaN(agent_id)) {
-    return res.status(400).json({ message: 'Agent ID must be a number' });
-  }
+  if (isNaN(agent_id)) return res.status(400).json({ message: 'Agent ID must be a number' });
 
   try {
-    const [pos] = await pool.query(
+    const [pos] = await db.query(
       `SELECT pos_id, pos_reference, agent_id, writer_id, platform_reference
        FROM pos_devices
        WHERE agent_id = ? AND platform_reference = ?
@@ -143,9 +144,7 @@ exports.getPosDevices = async (req, res) => {
 
     console.log('Query result:', pos);
 
-    if (!pos || pos.length === 0) {
-      return res.status(404).json({ msg: 'POS device not found' });
-    }
+    if (!pos || pos.length === 0) return res.status(404).json({ msg: 'POS device not found' });
 
     res.json({ pos });
   } catch (error) {
@@ -154,14 +153,7 @@ exports.getPosDevices = async (req, res) => {
   }
 };
 
-
-
-
-
-
-// controllers/assignmentController.js
-
-
+// 🟦 ASSIGN POS TO WRITER
 exports.assignPosToWriter = async (req, res) => {
   const { pos_id, writer_id, agent_id, platform_reference } = req.body;
 
@@ -171,7 +163,7 @@ exports.assignPosToWriter = async (req, res) => {
 
   try {
     // 1️⃣ Check POS belongs to this agent + platform
-    const [[pos]] = await pool.query(
+    const [[pos]] = await db.query(
       `SELECT pos_id, writer_id FROM pos_devices
        WHERE pos_id = ? AND agent_id = ? AND platform_reference = ?`,
       [pos_id, agent_id, platform_reference]
@@ -180,18 +172,15 @@ exports.assignPosToWriter = async (req, res) => {
     if (!pos) return res.status(404).json({ message: 'POS not found for this agent and platform' });
 
     // 2️⃣ Check if POS already assigned
-    if (pos.writer_id) {
-      return res.status(400).json({ message: 'POS is already assigned to a writer' });
-    }
+    if (pos.writer_id) return res.status(400).json({ message: 'POS is already assigned to a writer' });
 
     // 3️⃣ Assign POS to writer
-    await pool.query(
-      `UPDATE pos_device SET writer_id = ? WHERE pos_id = ?`,
+    await db.query(
+      `UPDATE pos_devices SET writer_id = ? WHERE pos_id = ?`,
       [writer_id, pos_id]
     );
 
     res.json({ message: 'POS successfully assigned to writer' });
-
   } catch (error) {
     console.error('Error assigning POS:', error);
     res.status(500).json({ message: 'Server error' });
