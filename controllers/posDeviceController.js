@@ -130,7 +130,7 @@ exports.deletePosDevice = async (req, res) => {
 };
 
 // controllers/posController.js
-const pool = require('../config/db');
+
 
 exports.getPosDevices = async (req, res) => {
   const { agent_id, platform_reference } = req.query;
@@ -142,7 +142,7 @@ exports.getPosDevices = async (req, res) => {
   try {
     const [pos] = await pool.query(
       `SELECT pos_id, pos_reference, agent_id, writer_id, platform_reference
-       FROM pos_device
+       FROM pos_devices
        WHERE agent_id = ? AND platform_reference = ?`,
       [agent_id, platform_reference]
     );
