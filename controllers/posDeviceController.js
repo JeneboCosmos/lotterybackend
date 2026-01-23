@@ -118,10 +118,10 @@ exports.deletePosDevice = async (req, res) => {
 // controllers/posController.js
 
 
-
-
 exports.getPosDevices = async (req, res) => {
   let { agent_id, platform_reference } = req.query;
+
+  console.log('Received query params:', { agent_id, platform_reference });
 
   if (!agent_id || !platform_reference) {
     return res.status(400).json({ message: 'Agent ID and platform_reference are required' });
@@ -141,13 +141,15 @@ exports.getPosDevices = async (req, res) => {
       [agent_id, platform_reference]
     );
 
-    if (pos.length === 0) {
+    console.log('Query result:', pos);
+
+    if (!pos || pos.length === 0) {
       return res.status(404).json({ msg: 'POS device not found' });
     }
 
     res.json({ pos });
   } catch (error) {
-    console.error('Error fetching POS devices:', error);
+    console.error('Detailed error:', error);
     res.status(500).json({ message: 'Server error' });
   }
 };
