@@ -5,7 +5,7 @@ const posDeviceController = require('../controllers/posDeviceController');
 // 🟩 CRUD ROUTES
 router.post('/', posDeviceController.createPosDevice);
 router.get('/', posDeviceController.getAllPosDevices);
-router.get('/:id', posDeviceController.getPosDeviceById);
+
 router.put('/:id', posDeviceController.updatePosDevice);
 router.delete('/:id', posDeviceController.deletePosDevice);
 router.get('/pos-of-agent', posDeviceController.getPosDevices);

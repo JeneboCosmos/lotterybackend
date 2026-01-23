@@ -60,21 +60,7 @@ exports.getAllPosDevices = async (req, res) => {
 };
 
 // 🟨 READ SINGLE POS DEVICE BY ID
-exports.getPosDeviceById = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const [rows] = await db.query('SELECT * FROM pos_devices WHERE pos_id = ?', [id]);
 
-    if (rows.length === 0) {
-      return res.status(404).json({ msg: 'POS device not found' });
-    }
-
-    res.json(rows[0]);
-  } catch (err) {
-    console.error('❌ Error fetching POS device:', err.message);
-    res.status(500).json({ msg: 'Internal server error' });
-  }
-};
 
 // 🟧 UPDATE POS DEVICE
 exports.updatePosDevice = async (req, res) => {
