@@ -118,29 +118,32 @@ exports.deletePosDevice = async (req, res) => {
 // controllers/posController.js
 
 
+
+
 exports.getPosDevices = async (req, res) => {
   let { agent_id, platform_reference } = req.query;
 
-  // Validate inputs
   if (!agent_id || !platform_reference) {
     return res.status(400).json({ message: 'Agent ID and platform_reference are required' });
   }
 
-  // Convert agent_id to a number
   agent_id = Number(agent_id);
   if (isNaN(agent_id)) {
     return res.status(400).json({ message: 'Agent ID must be a number' });
   }
 
   try {
-    // Parameterized query: platform_reference is treated as string
     const [pos] = await pool.query(
       `SELECT pos_id, pos_reference, agent_id, writer_id, platform_reference
        FROM pos_devices
        WHERE agent_id = ? AND platform_reference = ?
        LIMIT 0, 1000`,
-      [agent_id, platform_reference] // platform_reference stays as string
+      [agent_id, platform_reference]
     );
+
+    if (pos.length === 0) {
+      return res.status(404).json({ msg: 'POS device not found' });
+    }
 
     res.json({ pos });
   } catch (error) {
@@ -148,6 +151,7 @@ exports.getPosDevices = async (req, res) => {
     res.status(500).json({ message: 'Server error' });
   }
 };
+
 
 
 
