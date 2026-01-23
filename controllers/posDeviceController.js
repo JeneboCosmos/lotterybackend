@@ -133,18 +133,27 @@ exports.deletePosDevice = async (req, res) => {
 
 
 exports.getPosDevices = async (req, res) => {
-  const { agent_id, platform_reference } = req.query;
+  let { agent_id, platform_reference } = req.query;
 
+  // Validate inputs
   if (!agent_id || !platform_reference) {
-    return res.status(400).json({ message: 'Agent ID and platform_reference required' });
+    return res.status(400).json({ message: 'Agent ID and platform_reference are required' });
+  }
+
+  // Convert agent_id to a number
+  agent_id = Number(agent_id);
+  if (isNaN(agent_id)) {
+    return res.status(400).json({ message: 'Agent ID must be a number' });
   }
 
   try {
+    // Parameterized query: platform_reference is treated as string
     const [pos] = await pool.query(
       `SELECT pos_id, pos_reference, agent_id, writer_id, platform_reference
        FROM pos_devices
-       WHERE agent_id = ? AND platform_reference = ?`,
-      [agent_id, platform_reference]
+       WHERE agent_id = ? AND platform_reference = ?
+       LIMIT 0, 1000`,
+      [agent_id, platform_reference] // platform_reference stays as string
     );
 
     res.json({ pos });
