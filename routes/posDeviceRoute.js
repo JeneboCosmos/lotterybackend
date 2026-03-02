@@ -10,5 +10,9 @@ router.put('/:id', posDeviceController.updatePosDevice);
 router.delete('/:id', posDeviceController.deletePosDevice);
 router.get('/pos-of-agent', posDeviceController.getPosDevices);
 router.post('/assign-pos-to-writer', posDeviceController.assignPosToWriter);
+router.post('/assign', posDeviceController.assignPosToWriters);
+router.get('/', posDeviceController.getPosDevices);
+
+
 
 module.exports = router;

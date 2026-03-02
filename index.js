@@ -31,7 +31,7 @@ const histogramRouters = require("./routes/histogramRoutes");
 
 
 const app = express();
-const PORT = 5000;
+const PORT = 4000;
 
 app.use(cors());
 app.use(bodyParser.json());

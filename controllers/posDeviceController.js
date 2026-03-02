@@ -186,3 +186,122 @@ exports.assignPosToWriter = async (req, res) => {
     res.status(500).json({ message: 'Server error' });
   }
 };
+
+
+
+// 🟦 GET AVAILABLE POS DEVICES BY AGENT AND PLATFORM
+exports.getPosDevices = async (req, res) => {
+  let { agent_id, platform_reference } = req.query;
+
+  if (!agent_id || !platform_reference) {
+    return res.status(400).json({ message: 'agent_id and platform_reference are required' });
+  }
+
+  agent_id = Number(agent_id);
+  if (isNaN(agent_id)) {
+    return res.status(400).json({ message: 'agent_id must be a number' });
+  }
+
+  try {
+    const [pos] = await db.query(
+      `SELECT pos_id, pos_reference, agent_id, writer_id, platform_reference
+       FROM pos_devices
+       WHERE agent_id = ?
+       AND platform_reference = ?
+       AND writer_id IS NULL
+       ORDER BY created_at DESC`,
+      [agent_id, platform_reference]
+    );
+
+    return res.json({ count: pos.length, pos });
+
+  } catch (error) {
+    console.error('Error fetching POS:', error);
+    return res.status(500).json({ message: 'Server error' });
+  }
+};
+
+
+// 🟦 ASSIGN POS TO WRITER (SECURE)
+exports.assignPosToWriters = async (req, res) => {
+  const { pos_id, writer_id, agent_id } = req.body;
+
+  if (!pos_id || !writer_id || !agent_id) {
+    return res.status(400).json({ message: 'pos_id, writer_id and agent_id are required' });
+  }
+
+  const connection = await db.getConnection();
+
+  try {
+    await connection.beginTransaction();
+
+    // 1️⃣ Get POS
+    const [[pos]] = await connection.query(
+      `SELECT pos_id, agent_id, platform_reference, writer_id
+       FROM pos_devices
+       WHERE pos_id = ?`,
+      [pos_id]
+    );
+
+    if (!pos) {
+      await connection.rollback();
+      return res.status(404).json({ message: 'POS not found' });
+    }
+
+    // 2️⃣ Verify POS belongs to agent
+    if (pos.agent_id !== Number(agent_id)) {
+      await connection.rollback();
+      return res.status(403).json({ message: 'Unauthorized: POS does not belong to this agent' });
+    }
+
+    // 3️⃣ Check POS availability
+    if (pos.writer_id !== null) {
+      await connection.rollback();
+      return res.status(400).json({ message: 'POS already assigned' });
+    }
+
+    // 4️⃣ Verify writer
+    const [[writer]] = await connection.query(
+      `SELECT writer_id, agent_id, platform_reference
+       FROM writers
+       WHERE writer_id = ?`,
+      [writer_id]
+    );
+
+    if (!writer) {
+      await connection.rollback();
+      return res.status(404).json({ message: 'Writer not found' });
+    }
+
+    // 5️⃣ Ensure writer belongs to same agent
+    if (writer.agent_id !== Number(agent_id)) {
+      await connection.rollback();
+      return res.status(403).json({ message: 'Writer does not belong to this agent' });
+    }
+
+    // 6️⃣ Ensure platform match
+    if (writer.platform_reference !== pos.platform_reference) {
+      await connection.rollback();
+      return res.status(400).json({ message: 'Platform mismatch between POS and writer' });
+    }
+
+    // 7️⃣ Assign POS
+    await connection.query(
+      `UPDATE pos_devices
+       SET writer_id = ?, status = 'assigned', assigned_date = NOW(), updated_at = NOW()
+       WHERE pos_id = ?`,
+      [writer_id, pos_id]
+    );
+
+    await connection.commit();
+
+    return res.json({ message: 'POS successfully assigned to writer' });
+
+  } catch (error) {
+    await connection.rollback();
+    console.error('Error assigning POS:', error);
+    return res.status(500).json({ message: 'Server error' });
+  } finally {
+    connection.release();
+  }
+};
